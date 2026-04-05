@@ -1,0 +1,39 @@
+# ====================================================================
+# Dependências do Projeto - Análise ENEM 2019
+# ====================================================================
+# 
+# Instalação: pip install -r requirements.txt
+#
+
+# ─── CORE ─────────────────────────────────────────────────────────
+streamlit==1.28.1           # Framework web interativo
+pandas==2.1.3               # Manipulação de dados
+numpy==1.26.2               # Computação numérica
+
+# ─── VISUALIZAÇÃO ────────────────────────────────────────────────
+matplotlib==3.8.2           # Gráficos estáticos
+seaborn==0.13.1             # Gráficos estatísticos
+plotly==5.18.0              # Gráficos interativos (opcional)
+
+# ─── UTILIDADES ──────────────────────────────────────────────────
+python-dateutil==2.8.2      # Manipulação de datas
+pytz==2023.3                # Timezones
+charset-normalizer==3.3.2   # Codificação de caracteres
+
+# ─── VERSÕES ESPECÍFICAS RECOMENDADAS ────────────────────────────
+# Streamlit: 1.28+ (última estável)
+# Pandas: 2.1+ (com melhorias de performance)
+# Matplotlib: 3.8+ (compatibilidade com Streamlit)
+
+# ====================================================================
+# OBSERVAÇÕES:
+# 
+# 1. Python 3.8+ é obrigatório
+# 2. Para Windows: pip install -r requirements.txt
+# 3. Para Linux/Mac: pip3 install -r requirements.txt
+# 4. Ambiente virtual recomendado:
+#    python -m venv venv
+#    venv\Scripts\activate  # Windows
+#    source venv/bin/activate  # Linux/Mac
+#
+# ====================================================================
