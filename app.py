@@ -395,7 +395,7 @@ def pagina_presenca():
         st.pyplot(fig)
     
     # === Insight ===
-st.markdown("""
+    st.markdown("""
     <div style="
         background-color: black;
         color: white;
@@ -476,7 +476,12 @@ def pagina_disciplinas():
     
     # === Insights ===
     st.markdown("""
-    <div class="warning-box">
+    <div class="warning-box" style="
+        background-color: #1e1e2f;
+        color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #ffb000;">
     <strong>⚠️ ACHADO IMPORTANTE:</strong><br>
     • Ciências da Natureza = Disciplina MAIS DIFÍCIL (479.4 pontos)<br>
     • Redação = Melhor desempenho (596.8 pontos)<br>
@@ -586,14 +591,20 @@ def pagina_performers():
     
     # === Alerta ===
     st.markdown("""
-    <div class="warning-box">
-    <strong>🚨 ACHADO CRÍTICO:</strong><br>
-    Amazonas est SUB-REPRESENTADA no TOP 10%!<br>
-    • Amazonas: 0.7% dos top performers<br>
-    • Esperado: 3.2% (proporcional à população)<br>
-    • DÉFICIT: 141x menos representação
-    </div>
-    """, unsafe_allow_html=True)
+    <div class="warning-box" style="
+        background-color: #1e1e2f;
+        color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #ff4b4b;
+    ">
+        <strong>🚨 ACHADO CRÍTICO:</strong><br>
+        • Amazonas está SUB-REPRESENTADA no TOP 10%!<br>
+        • Amazonas: 0.7% dos top performers<br>
+        • Esperado: 3.2% (proporcional à população)<br>
+        • DÉFICIT: 141x menos representação
+        </div>
+        """, unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -719,7 +730,13 @@ def pagina_quartis():
     
     # === Insight ===
     st.markdown("""
-    <div class="warning-box">
+    <div class="warning-box" style="
+        background-color: #1e1e2f;
+        color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #ffb000;
+    ">
     <strong>⚠️ DESIGUALDADE CLARA:</strong><br>
     • Amazonas: 38.81% no Q1 (pior quartil)<br>
     • Outros: 24.73% no Q1<br>
@@ -857,10 +874,16 @@ def pagina_redacao():
     
     # === Insight ===
     st.markdown("""
-    <div class="insight-box">
+    <div class="insight-box" style="
+        background-color: #1e1e2f;
+        color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #4dabf7;
+    ">
     <strong>💡 INSIGHT:</strong><br>
-    Correlação de 0.626 = Redação é indicador FORTE de desempenho geral das 4 provas.
-    Quem se sai bem em redação tende a se sair bem nas demais disciplinas.
+    • Correlação de 0.626 = Redação é um indicador FORTE do desempenho geral nas 4 provas.<br>
+    • Quem se sai bem em redação tende a se sair bem nas demais disciplinas.
     </div>
     """, unsafe_allow_html=True)
 
@@ -963,7 +986,7 @@ def pagina_outliers():
     col1, col2 = st.columns(2)
     
     with col1:
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(8, 5))
         outlier_plot = df_notas['TIPO_OUTLIER'].value_counts()
         cores_outlier = ['#4ECDC4', '#FF6B6B', '#45B7D1']
         
@@ -972,28 +995,38 @@ def pagina_outliers():
         ax.set_ylabel('Número de Alunos')
         ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
         ax.grid(axis='y', alpha=0.3)
+    
+        # espaço extra no topo do gráfico
+        ax.set_ylim(0, outlier_plot.max() * 1.15)
         
         for i, v in enumerate(outlier_plot):
             pct = v / len(df_notas) * 100
-            ax.text(i, v, f'{v:,}\n({pct:.2f}%)', ha='center', fontsize=9)
-        
-        plt.tight_layout()
-        st.pyplot(fig)
+            ax.text(
+                i,
+                v + outlier_plot.max() * 0.01,  # sobe um pouco o texto
+                f'{v:,}\n({pct:.2f}%)',
+                ha='center',
+                va='bottom',
+                fontsize=9
+            )
     
-    with col2:
-        fig, ax = plt.subplots(figsize=(10, 6))
-        
-        outlier_grupo_pct.plot(kind='bar', ax=ax, 
-                              color=['#FF6B6B', '#4ECDC4', '#45B7D1'], width=0.7)
-        ax.set_title('Distribuição de Outliers por Região (%)', fontweight='bold')
-        ax.set_ylabel('Porcentagem (%)')
-        ax.set_xlabel('Região')
-        ax.legend(title='Tipo', fontsize=8)
-        ax.grid(axis='y', alpha=0.3)
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
-        
-        plt.tight_layout()
-        st.pyplot(fig)
+    plt.tight_layout()
+    st.pyplot(fig)
+    
+#    with col2:
+#        fig, ax = plt.subplots(figsize=(10, 6))
+#        
+#        outlier_grupo_pct.plot(kind='bar', ax=ax, 
+#                              color=['#FF6B6B', '#4ECDC4', '#45B7D1'], width=0.7)
+#        ax.set_title('Distribuição de Outliers por Região (%)', fontweight='bold')
+#        ax.set_ylabel('Porcentagem (%)')
+#        ax.set_xlabel('Região')
+#        ax.legend(title='Tipo', fontsize=8)
+#        ax.grid(axis='y', alpha=0.3)
+#        ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
+#        
+#        plt.tight_layout()
+#        st.pyplot(fig)
     
     # === Boxplot com Limites ===
     st.markdown("### 📦 Boxplot com Limites de Outliers")
@@ -1056,10 +1089,16 @@ def pagina_outliers():
     
     # === Insight ===
     st.markdown("""
-    <div class="insight-box">
+    <div class="insight-box" style="
+        background-color: #1e1e2f;
+        color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #4dabf7;
+    ">
     <strong>💡 INSIGHT:</strong><br>
-    Outliers são raros (0.43% altos, 0.03% baixos), mas CRÍTICOS para políticas públicas.<br>
-    Amazonas com ZERO outliers altos = Oportunidade perdida de apoiar talento.
+    • Outliers são raros (0.43% altos, 0.03% baixos), mas CRÍTICOS para políticas públicas.<br>
+    • Amazonas com ZERO outliers altos = oportunidade perdida de apoiar talento.
     </div>
     """, unsafe_allow_html=True)
 
@@ -1113,13 +1152,19 @@ def pagina_renda():
     pct_diff = (diferenca / menor_renda * 100)
     
     st.markdown(f"""
-    <div class="warning-box">
+    <div class="warning-box" style="
+        background-color: #1e1e2f;
+        color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #ff4b4b;
+    ">
     <strong>🚨 ACHADO CRÍTICO - DESIGUALDADE SOCIAL:</strong><br>
     • Menor renda (Nenhuma): {menor_renda:.1f} pontos<br>
     • Maior renda (Mais de 19.080): {maior_renda:.1f} pontos<br>
     • DIFERENÇA: {diferenca:.1f} pontos ({pct_diff:.1f}% melhor)<br>
     <br>
-    A renda familiar explica cerca de 30% da variação de desempenho!
+    • A renda familiar explica cerca de 30% da variação do desempenho!
     </div>
     """, unsafe_allow_html=True)
 
