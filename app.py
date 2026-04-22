@@ -61,19 +61,12 @@ st.markdown("""
 # FUNÇÕES DE CACHE - CARREGAMENTO DE DADOS
 # ═══════════════════════════════════════════════════════════════════════════
 
-@st.cache_data
+@st.cache_data(persist="disk", show_spinner="Carregando dados do ENEM...")
 def carregar_dados():
-    """Carrega e processa dados do ENEM 2019"""
-    caminho = Path(__file__).parent / "DADOS" / "microdados_enem_2019.csv"
+    caminho = Path(__file__).parent / "DADOS" / "microdados_enem_2019.parquet"
     
-    df = pd.read_csv(
-        caminho,
-        sep=';',
-        encoding='latin-1',
-        low_memory=False
-    )
+    df = pd.read_parquet(caminho, engine="pyarrow")
     
-    # Criar coluna FALTOU
     df['FALTOU'] = (
         (df['TP_PRESENCA_CN'] != 1) |
         (df['TP_PRESENCA_CH'] != 1) |
@@ -81,12 +74,14 @@ def carregar_dados():
         (df['TP_PRESENCA_MT'] != 1)
     )
     
-    # Criar coluna GRUPO_AM
-    df['GRUPO_AM'] = df['SG_UF_PROVA'].apply(
-        lambda x: 'Amazonas' if x == 'AM' else 'Outros estados'
+    df['GRUPO_AM'] = np.where(
+        df['SG_UF_PROVA'] == 'AM',
+        'Amazonas',
+        'Outros estados'
     )
     
     return df
+
 
 
 @st.cache_data
@@ -128,9 +123,9 @@ def processar_dados_notas(df):
     return df_notas
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+
 # PÁGINA: HOME
-# ═══════════════════════════════════════════════════════════════════════════
+
 
 def pagina_home():
     st.markdown('<p class="main-header">📊 Análise Exploratória ENEM 2019</p>', 
@@ -191,9 +186,9 @@ def pagina_home():
     """)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+
 # PÁGINA: LIMPEZA DE DADOS
-# ═══════════════════════════════════════════════════════════════════════════
+
 
 def pagina_limpeza():
     st.markdown('<p class="sub-header">🧹 Limpeza e Validação de Dados</p>', 
@@ -293,9 +288,9 @@ def pagina_limpeza():
     st.dataframe(checklist, use_container_width=True, hide_index=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+
 # PÁGINA: PRESENÇA/FALTANTES
-# ═══════════════════════════════════════════════════════════════════════════
+
 
 def pagina_presenca():
     st.markdown('<p class="sub-header">✅ Análise de Presença/Faltantes</p>', 
@@ -410,9 +405,9 @@ def pagina_presenca():
     """, unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+
 # PÁGINA: DESEMPENHO POR DISCIPLINA
-# ═══════════════════════════════════════════════════════════════════════════
+
 
 def pagina_disciplinas():
     st.markdown('<p class="sub-header">📚 Desempenho por Disciplina</p>', 
@@ -490,9 +485,9 @@ def pagina_disciplinas():
     """, unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+
 # PÁGINA: TOP/BOTTOM PERFORMERS
-# ═══════════════════════════════════════════════════════════════════════════
+
 
 def pagina_performers():
     st.markdown('<p class="sub-header">🏆 Top e Bottom Performers</p>', 
@@ -607,9 +602,9 @@ def pagina_performers():
         """, unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+
 # PÁGINA: QUARTIS E PERCENTIS
-# ═══════════════════════════════════════════════════════════════════════════
+
 
 def pagina_quartis():
     st.markdown('<p class="sub-header">📍 Quartis e Percentis</p>', 
@@ -746,9 +741,9 @@ def pagina_quartis():
     """, unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+
 # PÁGINA: COMPARATIVO DE REDAÇÃO
-# ═══════════════════════════════════════════════════════════════════════════
+
 
 def pagina_redacao():
     st.markdown('<p class="sub-header">✍️ Comparativo de Redação</p>', 
@@ -888,9 +883,8 @@ def pagina_redacao():
     """, unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
 # PÁGINA: OUTLIERS
-# ═══════════════════════════════════════════════════════════════════════════
+
 
 def pagina_outliers():
     st.markdown('<p class="sub-header">🎯 Análise de Outliers</p>', 
@@ -1103,9 +1097,9 @@ def pagina_outliers():
     """, unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+
 # PÁGINA: ANÁLISE POR RENDA
-# ═══════════════════════════════════════════════════════════════════════════
+
 
 def pagina_renda():
     st.markdown('<p class="sub-header">💰 Análise por Renda Familiar</p>', 
@@ -1169,9 +1163,9 @@ def pagina_renda():
     """, unsafe_allow_html=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+
 # PÁGINA: CONCLUSÕES
-# ═══════════════════════════════════════════════════════════════════════════
+
 
 def pagina_conclusoes():
     st.markdown('<p class="sub-header">🎯 Insights & Conclusões</p>', 
@@ -1282,9 +1276,9 @@ def pagina_conclusoes():
     """)
 
 
-# ═══════════════════════════════════════════════════════════════════════════
+
 # SIDEBAR E NAVEGAÇÃO
-# ═══════════════════════════════════════════════════════════════════════════
+
 
 def main():
     st.sidebar.markdown("# 📊 ENEM 2019 - Dashboard")

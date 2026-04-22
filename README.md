@@ -379,3 +379,8 @@ Para dúvidas ou problemas:
 **Versão**: 1.0  
 **Data**: Abril/2026  
 **Status**: ✅ Pronto para Produção
+
+
+
+
+Atualizações para .parquet 
