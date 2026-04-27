@@ -1,13 +1,3 @@
-"""
-╔════════════════════════════════════════════════════════════════════════════╗
-║                  ANÁLISE EXPLORATÓRIA ENEM 2019                            ║
-║              Dashboard Interativo - Amazonas vs Outros Estados             ║
-╚════════════════════════════════════════════════════════════════════════════╝
-
-Aplicação Streamlit para análise completa dos dados do ENEM 2019
-Comparação entre Amazonas (AM) e outras unidades federativas
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -56,6 +46,42 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TESTE TEMPORÁRIO - VERIFICAR SE O PARQUET EXISTE NO STREAMLIT CLOUD
+# Depois que testar, remova este bloco para voltar ao dashboard completo.
+# ═══════════════════════════════════════════════════════════════════════════
+st.title("Teste de carregamento do arquivo Parquet")
+
+BASE_DIR = Path(__file__).parent
+ARQUIVO = BASE_DIR / "DADOS" / "microdados_enem_2019.parquet"
+
+st.write("Pasta atual do app:", str(BASE_DIR))
+st.write("Caminho esperado do arquivo:", str(ARQUIVO))
+st.write("Arquivo existe?", ARQUIVO.exists())
+
+if ARQUIVO.exists():
+    tamanho_mb = ARQUIVO.stat().st_size / 1024 / 1024
+    st.write("Tamanho do arquivo em MB:", round(tamanho_mb, 2))
+
+    if tamanho_mb < 10:
+        st.error("O arquivo existe, mas está pequeno demais. Provavelmente o Git LFS subiu só o ponteiro, não o arquivo real.")
+    else:
+        st.success("O arquivo parece estar presente com tamanho real.")
+
+    try:
+        import pyarrow.parquet as pq
+        parquet = pq.ParquetFile(ARQUIVO)
+        st.write("Linhas detectadas no Parquet:", f"{parquet.metadata.num_rows:,}")
+        st.write("Colunas detectadas no Parquet:", parquet.metadata.num_columns)
+        st.success("PyArrow conseguiu ler os metadados do Parquet sem carregar o arquivo inteiro.")
+    except Exception as e:
+        st.error("O arquivo existe, mas o PyArrow não conseguiu ler os metadados.")
+        st.exception(e)
+else:
+    st.error("O arquivo NÃO foi encontrado. O problema é caminho do arquivo ou Git LFS.")
+
+st.stop()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # FUNÇÕES DE CACHE - CARREGAMENTO DE DADOS
