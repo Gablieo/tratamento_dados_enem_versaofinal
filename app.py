@@ -256,8 +256,7 @@ def pagina_home():
             st.metric("Faltantes", fmt_int(faltantes))
             st.metric("Taxa de Comparecimento", f"{comparecidos / total * 100:.2f}%")
 
-    st.markdown("---")
-    st.info("✅ O app usa DuckDB para consultar o Parquet completo sem carregar os 553 MB inteiros em um DataFrame.")
+    
 
     st.markdown(
         """
