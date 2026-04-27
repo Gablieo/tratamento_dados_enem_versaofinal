@@ -4,14 +4,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 import warnings
-import duckdb
+import duckdb as db
 import pyarrow.parquet as pq
 
 warnings.filterwarnings("ignore")
 
-# ═══════════════════════════════════════════════════════════════════════════
-# CONFIG STREAMLIT
-# ═══════════════════════════════════════════════════════════════════════════
 st.set_page_config(
     page_title="Análise ENEM 2019",
     page_icon="📊",
@@ -19,7 +16,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# CSS customizado
 st.markdown(
     """
 <style>
@@ -51,10 +47,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ═══════════════════════════════════════════════════════════════════════════
-# BANCO/CONSULTAS - NÃO CARREGA O PARQUET INTEIRO EM PANDAS
-# ═══════════════════════════════════════════════════════════════════════════
-
 BASE_DIR = Path(__file__).parent
 ARQUIVO_PARQUET = BASE_DIR / "DADOS" / "microdados_enem_2019.parquet"
 ARQUIVO_SQL = ARQUIVO_PARQUET.as_posix().replace("'", "''")
@@ -84,12 +76,11 @@ END
 
 @st.cache_resource(show_spinner="Preparando conexão com o arquivo Parquet...")
 def conectar():
-    """Cria views DuckDB em cima do Parquet sem carregar tudo em memória."""
     if not ARQUIVO_PARQUET.exists():
         st.error(f"Arquivo não encontrado: {ARQUIVO_PARQUET}")
         st.stop()
 
-    con = duckdb.connect(database=":memory:")
+    con = db.connect(database=":memory:")
     con.execute("PRAGMA threads=2")
     con.execute("PRAGMA memory_limit='700MB'")
 
@@ -133,11 +124,8 @@ def conectar():
     )
     return con
 
-
 def query_df(sql: str) -> pd.DataFrame:
-    """Executa SQL no DuckDB e retorna apenas o resultado agregado em DataFrame."""
     return conectar().execute(sql).df()
-
 
 @st.cache_data(show_spinner=False)
 def info_arquivo():
@@ -148,7 +136,6 @@ def info_arquivo():
         "tamanho_mb": ARQUIVO_PARQUET.stat().st_size / 1024 / 1024,
         "colunas_nomes": pf.schema.names,
     }
-
 
 @st.cache_data(show_spinner="Calculando métricas gerais...")
 def metricas_gerais():
@@ -163,7 +150,6 @@ def metricas_gerais():
         FROM enem
         """
     ).iloc[0]
-
 
 @st.cache_data(show_spinner="Calculando estatísticas de notas...")
 def estatisticas_disciplinas():
@@ -190,7 +176,6 @@ def estatisticas_disciplinas():
         )
     return query_df(" UNION ALL ".join(partes)).round(2)
 
-
 @st.cache_data(show_spinner="Calculando médias por grupo...")
 def medias_grupo_disciplinas():
     return query_df(
@@ -208,18 +193,11 @@ def medias_grupo_disciplinas():
         """
     )
 
-
 def fmt_int(valor):
     return f"{int(valor):,}".replace(",", ".")
 
-
 def fmt_float(valor, casas=2):
     return f"{float(valor):.{casas}f}"
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PÁGINA: HOME
-# ═══════════════════════════════════════════════════════════════════════════
 
 def pagina_home():
     st.markdown('<p class="main-header">📊 Análise Exploratória ENEM 2019</p>', unsafe_allow_html=True)
@@ -229,12 +207,10 @@ def pagina_home():
     with col1:
         st.markdown(
             """
-        ### 🎯 Objetivo
         Análise comparativa de desempenho no ENEM 2019 entre:
         - **Amazonas (AM)**
         - **Outros estados**
 
-        ### 📈 Cobertura
         ✅ Arquivo completo do ENEM 2019  
         ✅ Consultas feitas sobre todos os registros  
         ✅ 17 faixas de renda familiar  
@@ -256,11 +232,10 @@ def pagina_home():
             st.metric("Faltantes", fmt_int(faltantes))
             st.metric("Taxa de Comparecimento", f"{comparecidos / total * 100:.2f}%")
 
-    
+    st.markdown("---")
 
     st.markdown(
         """
-    ### 📋 Navegação
 
     Use o **menu lateral** para acessar as análises:
 
@@ -275,11 +250,6 @@ def pagina_home():
     9. **Insights & Conclusões** - Resumo das principais descobertas
     """
     )
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PÁGINA: LIMPEZA DE DADOS
-# ═══════════════════════════════════════════════════════════════════════════
 
 def pagina_limpeza():
     st.markdown('<p class="sub-header">🧹 Limpeza e Validação de Dados</p>', unsafe_allow_html=True)
@@ -382,11 +352,6 @@ def pagina_limpeza():
     )
     st.dataframe(checklist, use_container_width=True, hide_index=True)
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PÁGINA: PRESENÇA/FALTANTES
-# ═══════════════════════════════════════════════════════════════════════════
-
 def pagina_presenca():
     st.markdown('<p class="sub-header">✅ Análise de Presença/Faltantes</p>', unsafe_allow_html=True)
 
@@ -473,11 +438,6 @@ def pagina_presenca():
         unsafe_allow_html=True,
     )
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PÁGINA: DESEMPENHO POR DISCIPLINA
-# ═══════════════════════════════════════════════════════════════════════════
-
 def pagina_disciplinas():
     st.markdown('<p class="sub-header">📚 Desempenho por Disciplina</p>', unsafe_allow_html=True)
 
@@ -531,11 +491,6 @@ def pagina_disciplinas():
     """,
         unsafe_allow_html=True,
     )
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PÁGINA: TOP/BOTTOM PERFORMERS
-# ═══════════════════════════════════════════════════════════════════════════
 
 def pagina_performers():
     st.markdown('<p class="sub-header">🏆 Top e Bottom Performers</p>', unsafe_allow_html=True)
@@ -618,21 +573,14 @@ def pagina_performers():
         plt.tight_layout()
         st.pyplot(fig)
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PÁGINA: QUARTIS E PERCENTIS
-# ═══════════════════════════════════════════════════════════════════════════
-
 def pagina_quartis():
     st.markdown('<p class="sub-header">📍 Quartis e Percentis</p>', unsafe_allow_html=True)
 
     with st.expander("📚 O QUE SÃO QUARTIS E PERCENTIS?"):
         st.markdown(
             """
-        ### Quartis
         Dividem os dados em **4 partes iguais** (25% cada).
 
-        ### Percentis
         Dividem os dados em **100 partes** (1% cada).
         """
         )
@@ -715,11 +663,6 @@ def pagina_quartis():
     plt.tight_layout()
     st.pyplot(fig)
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PÁGINA: COMPARATIVO DE REDAÇÃO
-# ═══════════════════════════════════════════════════════════════════════════
-
 def pagina_redacao():
     st.markdown('<p class="sub-header">✍️ Comparativo de Redação</p>', unsafe_allow_html=True)
 
@@ -766,7 +709,6 @@ def pagina_redacao():
     col1, col2 = st.columns(2)
 
     with col1:
-        # Histograma agregado por faixas para não carregar milhões de linhas
         hist = query_df(
             """
             SELECT
@@ -831,11 +773,6 @@ def pagina_redacao():
     ax.grid(True, alpha=0.3)
     ax.legend()
     st.pyplot(fig)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PÁGINA: OUTLIERS
-# ═══════════════════════════════════════════════════════════════════════════
 
 def pagina_outliers():
     st.markdown('<p class="sub-header">🎯 Análise de Outliers</p>', unsafe_allow_html=True)
@@ -978,11 +915,6 @@ def pagina_outliers():
     ax.grid(True, alpha=0.3)
     st.pyplot(fig)
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PÁGINA: ANÁLISE POR RENDA
-# ═══════════════════════════════════════════════════════════════════════════
-
 def pagina_renda():
     st.markdown('<p class="sub-header">💰 Análise por Renda Familiar</p>', unsafe_allow_html=True)
 
@@ -1034,51 +966,35 @@ def pagina_renda():
         unsafe_allow_html=True,
     )
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PÁGINA: CONCLUSÕES
-# ═══════════════════════════════════════════════════════════════════════════
-
 def pagina_conclusoes():
     st.markdown('<p class="sub-header">🎯 Insights & Conclusões</p>', unsafe_allow_html=True)
 
     st.markdown(
         """
-    ## 🔴 ACHADOS CRÍTICOS
 
-    ### 1. Desigualdade Regional
     - A análise compara Amazonas com os demais estados usando o arquivo completo do ENEM 2019.
     - As consultas são feitas diretamente no Parquet, sem carregar tudo na memória.
 
-    ### 2. Presença e desempenho
     - A taxa de comparecimento é calculada a partir das colunas de presença.
     - As médias consideram apenas candidatos presentes e com redação válida.
 
-    ### 3. Renda familiar
     - A renda é analisada pela variável Q006, traduzida em faixas legíveis.
 
     ---
 
-    ## 📋 RECOMENDAÇÕES
-
-    ### Curto Prazo:
     1. ✅ Investigar causas de maior ausência nas provas
     2. ✅ Analisar infraestrutura escolar
     3. ✅ Verificar qualificação e apoio pedagógico
 
-    ### Médio Prazo:
     1. 📅 Programa de reforço em disciplinas críticas
     2. 📅 Bolsas e apoio para populações de baixa renda
     3. 📅 Capacitação de professores
 
-    ### Longo Prazo:
     1. 🎯 Investimento em educação fundamental
     2. 🎯 Políticas de inclusão social
     3. 🎯 Programa de identificação de talentos
 
     ---
-
-    ## 📊 QUALIDADE DOS DADOS
 
     ✅ Arquivo completo processado  
     ✅ Metadados validados  
@@ -1086,11 +1002,6 @@ def pagina_conclusoes():
     ✅ Sem necessidade de reduzir o arquivo original  
     """
     )
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# SIDEBAR E NAVEGAÇÃO
-# ═══════════════════════════════════════════════════════════════════════════
 
 def main():
     st.sidebar.markdown("# 📊 ENEM 2019 - Dashboard")
@@ -1115,7 +1026,6 @@ def main():
     st.sidebar.markdown("---")
     st.sidebar.markdown(
         """
-    ### 📌 Sobre
     Dashboard interativo para análise dos dados do ENEM 2019.
 
     **Período**: 2019  
@@ -1124,9 +1034,7 @@ def main():
 
     ---
 
-    ### 🔧 Tecnologia
     - **Streamlit**: Interface
-    - **DuckDB**: Consulta do Parquet completo
     - **Pandas**: Resultados agregados
     - **Matplotlib**: Visualizações
     """
@@ -1152,7 +1060,6 @@ def main():
         pagina_renda()
     elif pagina == "🎯 Insights & Conclusões":
         pagina_conclusoes()
-
 
 if __name__ == "__main__":
     main()
