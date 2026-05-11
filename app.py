@@ -9,6 +9,15 @@ import pyarrow.parquet as pq
 
 warnings.filterwarnings("ignore")
 
+# Ajustes leves de legibilidade dos gráficos, sem alterar cores ou estrutura visual.
+plt.rcParams.update({
+    "figure.autolayout": True,
+    "axes.titlepad": 12,
+    "axes.labelpad": 8,
+    "xtick.labelsize": 9,
+    "ytick.labelsize": 9,
+})
+
 st.set_page_config(
     page_title="Análise ENEM 2019",
     page_icon="📊",
@@ -938,46 +947,26 @@ def pagina_performers():
         st.info("Os filtros atuais não retornaram dados suficientes para comparar AM vs Outros estados.")
         return
 
-    desempenho["Top 10% (%)"] = desempenho["media_top_10"] / ESCALA_NOTA * 100
-    desempenho["Bottom 10% (%)"] = desempenho["media_bottom_10"] / ESCALA_NOTA * 100
-    desempenho["Top 10% (nota)"] = desempenho["media_top_10"]
-    desempenho["Bottom 10% (nota)"] = desempenho["media_bottom_10"]
+    def valor_grupo(coluna, grupo):
+        dados = desempenho.loc[desempenho["GRUPO_AM"] == grupo, coluna]
+        return float(dados.iloc[0]) if len(dados) and pd.notna(dados.iloc[0]) else np.nan
 
-    top_tabela = tabela_comparativa_grupos(desempenho, "Top 10% (%)", "Top 10% (%)")
-    bottom_tabela = tabela_comparativa_grupos(desempenho, "Bottom 10% (%)", "Bottom 10% (%)")
-    top_tabela_nota = tabela_comparativa_grupos(desempenho, "Top 10% (nota)", "Top 10% (nota)")
-    bottom_tabela_nota = tabela_comparativa_grupos(desempenho, "Bottom 10% (nota)", "Bottom 10% (nota)")
+    top_am = valor_grupo("media_top_10", GRUPO_AM)
+    top_outros = valor_grupo("media_top_10", GRUPO_OUTROS)
+    bottom_am = valor_grupo("media_bottom_10", GRUPO_AM)
+    bottom_outros = valor_grupo("media_bottom_10", GRUPO_OUTROS)
 
-    top_display = top_tabela.merge(
-        top_tabela_nota[["Comparação", "Top 10% (nota) - AM", "Top 10% (nota) - Outros estados"]],
-        on="Comparação",
-        how="left",
-    )[
-        [
-            "Comparação",
-            "Top 10% (nota) - AM",
-            "Top 10% (%) - AM",
-            "Top 10% (nota) - Outros estados",
-            "Top 10% (%) - Outros estados",
-            "Diferença % (AM vs Outros)",
-            "Leitura",
-        ]
-    ]
-    bottom_display = bottom_tabela.merge(
-        bottom_tabela_nota[["Comparação", "Bottom 10% (nota) - AM", "Bottom 10% (nota) - Outros estados"]],
-        on="Comparação",
-        how="left",
-    )[
-        [
-            "Comparação",
-            "Bottom 10% (nota) - AM",
-            "Bottom 10% (%) - AM",
-            "Bottom 10% (nota) - Outros estados",
-            "Bottom 10% (%) - Outros estados",
-            "Diferença % (AM vs Outros)",
-            "Leitura",
-        ]
-    ]
+    if any(pd.isna(v) for v in [top_am, top_outros, bottom_am, bottom_outros]):
+        st.info("Os filtros atuais não retornaram dados suficientes para calcular as médias de Top/Bottom nos dois grupos.")
+        return
+
+    top_diff = diferenca_percentual(top_am, top_outros)
+    bottom_diff = diferenca_percentual(bottom_am, bottom_outros)
+
+    st.caption(
+        "O Top 10% e o Bottom 10% são calculados pela média das notas dentro da base filtrada. "
+        "A comparação abaixo mostra desempenho médio, não quantidade de alunos."
+    )
 
     col1, col2 = st.columns(2)
     with col1:
@@ -986,53 +975,74 @@ def pagina_performers():
         st.metric("Corte Bottom 10%", f"{p10:.1f} pontos / {fmt_pct(p10 / ESCALA_NOTA * 100)}")
 
     st.markdown("### 📊 Comparação de Desempenho por Região")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**TOP 10% (Média de desempenho)**")
-        st.dataframe(
-            top_display.style.format({
-                "Top 10% (nota) - AM": "{:.2f}",
-                "Top 10% (%) - AM": "{:.2f}%",
-                "Top 10% (nota) - Outros estados": "{:.2f}",
-                "Top 10% (%) - Outros estados": "{:.2f}%",
-                "Diferença % (AM vs Outros)": "{:.2f}%",
-            }),
-            use_container_width=True,
-            hide_index=True,
-        )
-    with col2:
-        st.markdown("**BOTTOM 10% (Média de desempenho)**")
-        st.dataframe(
-            bottom_display.style.format({
-                "Bottom 10% (nota) - AM": "{:.2f}",
-                "Bottom 10% (%) - AM": "{:.2f}%",
-                "Bottom 10% (nota) - Outros estados": "{:.2f}",
-                "Bottom 10% (%) - Outros estados": "{:.2f}%",
-                "Diferença % (AM vs Outros)": "{:.2f}%",
-            }),
-            use_container_width=True,
-            hide_index=True,
-        )
+
+    top_bottom_display = pd.DataFrame(
+        {
+            "Faixa": ["TOP 10%", "BOTTOM 10%"],
+            "AM nota": [top_am, bottom_am],
+            "AM %": [top_am / ESCALA_NOTA * 100, bottom_am / ESCALA_NOTA * 100],
+            "Outros nota": [top_outros, bottom_outros],
+            "Outros %": [top_outros / ESCALA_NOTA * 100, bottom_outros / ESCALA_NOTA * 100],
+            "Diferença %": [top_diff, bottom_diff],
+        }
+    )
+
+    st.dataframe(
+        top_bottom_display.style.format({
+            "AM nota": "{:.2f}",
+            "AM %": "{:.2f}%",
+            "Outros nota": "{:.2f}",
+            "Outros %": "{:.2f}%",
+            "Diferença %": "{:.2f}%",
+        }),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.markdown(
+        f"""
+    <div class="insight-box">
+    <strong>Leitura TOP 10%:</strong><br>
+    A média do Top 10% no AM é <strong>{top_am:.2f}</strong> pontos ({top_am / ESCALA_NOTA * 100:.2f}%).
+    Nos outros estados, a média é <strong>{top_outros:.2f}</strong> pontos ({top_outros / ESCALA_NOTA * 100:.2f}%).
+    Diferença relativa: <strong>{top_diff:.2f}%</strong>.
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f"""
+    <div class="insight-box">
+    <strong>Leitura BOTTOM 10%:</strong><br>
+    A média do Bottom 10% no AM é <strong>{bottom_am:.2f}</strong> pontos ({bottom_am / ESCALA_NOTA * 100:.2f}%).
+    Nos outros estados, a média é <strong>{bottom_outros:.2f}</strong> pontos ({bottom_outros / ESCALA_NOTA * 100:.2f}%).
+    Diferença relativa: <strong>{bottom_diff:.2f}%</strong>.
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
 
     st.markdown("### 📈 Visualização Comparativa")
     plot_df = pd.DataFrame(
         {
             "Grupo": ["TOP 10%", "BOTTOM 10%"],
-            "AM": [top_tabela.iloc[0]["Top 10% (%) - AM"], bottom_tabela.iloc[0]["Bottom 10% (%) - AM"]],
-            "Outros estados": [top_tabela.iloc[0]["Top 10% (%) - Outros estados"], bottom_tabela.iloc[0]["Bottom 10% (%) - Outros estados"]],
+            "AM": [top_am / ESCALA_NOTA * 100, bottom_am / ESCALA_NOTA * 100],
+            "Outros estados": [top_outros / ESCALA_NOTA * 100, bottom_outros / ESCALA_NOTA * 100],
         }
     ).set_index("Grupo")
 
-    fig, ax = plt.subplots(figsize=(10, 6))
-    plot_df.plot(kind="bar", ax=ax, color=["#3da700", "#3C00E0"], width=0.6)
+    fig, ax = plt.subplots(figsize=(9, 5))
+    plot_df.plot(kind="bar", ax=ax, color=["#3da700", "#3C00E0"], width=0.55)
     ax.set_title("Top/Bottom: Média de Desempenho (%)", fontsize=12, fontweight="bold")
     ax.set_ylabel("Média em % da escala")
     ax.set_ylim(0, 100)
     ax.grid(axis="y", alpha=0.3)
     ax.set_xticklabels(ax.get_xticklabels(), rotation=0)
+    ax.legend(title="Região", loc="upper right")
     for container in ax.containers:
-        ax.bar_label(container, fmt="%.1f%%", fontsize=9)
-    plt.tight_layout()
+        ax.bar_label(container, fmt="%.1f%%", fontsize=9, padding=3)
+    fig.tight_layout(pad=2)
     st.pyplot(fig)
 
 def pagina_quartis():
@@ -1231,6 +1241,7 @@ def pagina_redacao():
         ax.set_ylabel("Percentual (%)")
         ax.grid(axis="y", alpha=0.3)
         ax.legend(title="Região")
+        fig.tight_layout(pad=2)
         st.pyplot(fig)
 
     with col2:
@@ -1257,7 +1268,8 @@ def pagina_redacao():
         ax.grid(axis="y", alpha=0.3)
         ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
         for i, v in enumerate(valores):
-            ax.text(i, v + 1, f"{v:.1f}%", ha="center", fontsize=9)
+            ax.text(i, min(v + 1, 98), f"{v:.1f}%", ha="center", fontsize=9)
+        fig.tight_layout(pad=2)
         st.pyplot(fig)
 
     st.markdown("### 🔗 Correlação Redação vs Média de Provas")
@@ -1287,6 +1299,7 @@ def pagina_redacao():
     ax.set_ylabel("Nota de Redação (%)")
     ax.grid(True, alpha=0.3)
     ax.legend()
+    fig.tight_layout(pad=2)
     st.pyplot(fig)
 
 def pagina_outliers():
@@ -1362,15 +1375,16 @@ def pagina_outliers():
     st.markdown("### 📈 Visualização")
     col1, col2 = st.columns(2)
     with col1:
-        fig, ax = plt.subplots(figsize=(8, 5))
+        fig, ax = plt.subplots(figsize=(7.2, 4.8))
         tabela_pct.T.plot(kind="bar", ax=ax, color=["#3da700", "#3C00E0"], width=0.7)
-        ax.set_title("Distribuição Percentual de Outliers", fontweight="bold")
+        ax.set_title("Distribuição Percentual de Outliers", fontweight="bold", pad=12)
         ax.set_ylabel("Percentual (%)")
         ax.set_ylim(0, 100)
         ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
         ax.grid(axis="y", alpha=0.3)
         for container in ax.containers:
-            ax.bar_label(container, fmt="%.1f%%", fontsize=9)
+            ax.bar_label(container, fmt="%.1f%%", fontsize=8, padding=3)
+        fig.tight_layout(pad=2)
         st.pyplot(fig)
 
     with col2:
@@ -1383,7 +1397,7 @@ def pagina_outliers():
             LIMIT 25000
             """
         )
-        fig, ax = plt.subplots(figsize=(8, 5))
+        fig, ax = plt.subplots(figsize=(7.2, 4.8))
         dados_am = amostra_box[amostra_box["GRUPO_AM"] == "Amazonas"]["MEDIA_NOTAS"] / ESCALA_NOTA * 100
         dados_outros = amostra_box[amostra_box["GRUPO_AM"] == "Outros estados"]["MEDIA_NOTAS"] / ESCALA_NOTA * 100
         bp = ax.boxplot([dados_am, dados_outros], labels=["Amazonas", "Outros estados"], patch_artist=True, showfliers=True)
@@ -1392,10 +1406,11 @@ def pagina_outliers():
             patch.set_alpha(0.7)
         ax.axhline(upper_bound / ESCALA_NOTA * 100, color="red", linestyle="--", linewidth=2, label=f"Upper Bound: {upper_bound:.1f} pts / {upper_bound / ESCALA_NOTA * 100:.1f}%")
         ax.axhline(lower_bound / ESCALA_NOTA * 100, color="orange", linestyle="--", linewidth=2, label=f"Lower Bound: {lower_bound:.1f} pts / {lower_bound / ESCALA_NOTA * 100:.1f}%")
-        ax.set_title("Boxplot com Limites de Outliers", fontweight="bold")
+        ax.set_title("Boxplot com Limites de Outliers", fontweight="bold", pad=12)
         ax.set_ylabel("Média de Notas (%)")
-        ax.legend(fontsize=8)
+        ax.legend(fontsize=8, loc="upper left")
         ax.grid(True, alpha=0.3)
+        fig.tight_layout(pad=2)
         st.pyplot(fig)
 
     st.markdown("### 📊 Distribuição com Zonas de Outliers")
@@ -1409,18 +1424,20 @@ def pagina_outliers():
         """
     )
     hist["Percentual"] = hist.groupby("GRUPO_AM")["frequencia"].transform(lambda x: x / x.sum() * 100)
-    hist_pivot = hist.pivot(index="faixa", columns="GRUPO_AM", values="Percentual").fillna(0)
+    hist_pivot = hist.pivot(index="faixa", columns="GRUPO_AM", values="Percentual").fillna(0).sort_index()
     media = query_df(f"SELECT AVG(MEDIA_NOTAS) AS media FROM enem_notas {filter_clause}").iloc[0]["media"]
-    fig, ax = plt.subplots(figsize=(12, 6))
-    hist_pivot.plot(kind="bar", ax=ax, color=["#3da700", "#3C00E0"], alpha=0.6)
-    ax.axvline(lower_bound / ESCALA_NOTA * 100, color="orange", linestyle="--", linewidth=2.5, label=f"Lower Bound: {lower_bound:.1f} pts / {lower_bound / ESCALA_NOTA * 100:.1f}%")
-    ax.axvline(upper_bound / ESCALA_NOTA * 100, color="red", linestyle="--", linewidth=2.5, label=f"Upper Bound: {upper_bound:.1f} pts / {upper_bound / ESCALA_NOTA * 100:.1f}%")
+    fig, ax = plt.subplots(figsize=(12, 5.5))
+    hist_pivot.plot(kind="line", ax=ax, color=["#3da700", "#3C00E0"], marker="o", linewidth=2, markersize=3)
+    ax.axvline(lower_bound / ESCALA_NOTA * 100, color="orange", linestyle="--", linewidth=2.2, label=f"Lower Bound: {lower_bound:.1f} pts / {lower_bound / ESCALA_NOTA * 100:.1f}%")
+    ax.axvline(upper_bound / ESCALA_NOTA * 100, color="red", linestyle="--", linewidth=2.2, label=f"Upper Bound: {upper_bound:.1f} pts / {upper_bound / ESCALA_NOTA * 100:.1f}%")
     ax.axvline(media / ESCALA_NOTA * 100, color="black", linestyle="-", linewidth=2, label=f"Média: {media:.1f} pts / {media / ESCALA_NOTA * 100:.1f}%")
-    ax.set_title("Distribuição Percentual com Zonas de Outliers", fontweight="bold", fontsize=12)
+    ax.set_title("Distribuição Percentual com Zonas de Outliers", fontweight="bold", fontsize=12, pad=12)
     ax.set_xlabel("Média de Notas (%)")
     ax.set_ylabel("Percentual da distribuição (%)")
+    ax.set_xlim(0, 100)
     ax.legend(fontsize=8, loc="upper left")
     ax.grid(True, alpha=0.3)
+    fig.tight_layout(pad=2)
     st.pyplot(fig)
 
 def pagina_renda():
@@ -1623,7 +1640,7 @@ def pagina_nota_renda():
     ax.legend()
     st.pyplot(fig)
 
-    st.markdown("### 🔍 Insight automático")
+    st.markdown("### 🔍 Curiosidade")
     if pd.notna(corr_am) and pd.notna(corr_outros):
         if abs(corr_am) > abs(corr_outros):
             frase = "Em AM a renda possui correlação mais forte com desempenho do que nos demais estados."
@@ -1634,7 +1651,7 @@ def pagina_nota_renda():
         st.markdown(
             f"""
         <div class="insight-box">
-        <strong>{frase}</strong><br>
+        <strong>Curiosidade:</strong> {frase}<br>
         Correlação AM: {corr_am:.3f} | Correlação Outros estados: {corr_outros:.3f}
         </div>
         """,
