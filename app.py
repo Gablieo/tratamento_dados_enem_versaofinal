@@ -311,6 +311,15 @@ def texto_comparativo(valor):
         return f"AM está {abs(valor):.2f}% abaixo dos outros estados"
     return "AM está igual aos outros estados"
 
+def exibir_comparacao_padrao(contexto=""):
+    texto = (
+        "Comparação feita: Amazonas (AM) vs Outros estados (Brasil excluindo AM). "
+        "Diferença percentual = ((AM - Outros estados) / Outros estados) × 100."
+    )
+    if contexto:
+        texto += f" {contexto}"
+    st.caption(texto)
+
 def filtro_atual():
     return st.session_state.get("filter_clause", "")
 
@@ -522,6 +531,7 @@ def correlacao_renda_nota(filter_clause=""):
 
 def pagina_home():
     st.markdown('<p class="main-header">📊 Análise Exploratória ENEM 2019</p>', unsafe_allow_html=True)
+    exibir_comparacao_padrao("A página resume presença e desempenho com os filtros globais aplicados.")
 
     filter_clause = filtro_atual()
     col1, col2 = st.columns(2)
@@ -592,6 +602,7 @@ def pagina_home():
 
 def pagina_limpeza():
     st.markdown('<p class="sub-header">🧹 Limpeza e Validação de Dados</p>', unsafe_allow_html=True)
+    exibir_comparacao_padrao("Nesta aba, a comparação usa o percentual de valores nulos por grupo.")
 
     filter_clause = filtro_atual()
     info = info_arquivo()
@@ -647,7 +658,16 @@ def pagina_limpeza():
                 use_container_width=True,
                 hide_index=True,
             )
-            st.info("⚠️ Valores nulos detectados — as análises filtram notas ausentes quando necessário.")
+            st.markdown(
+                """
+            <div class="warning-box">
+            <strong>⚠️ Valores nulos detectados:</strong><br>
+            A tabela acima mostra, para cada coluna, o percentual de dados ausentes no AM e nos Outros estados.
+            As análises de desempenho continuam usando apenas registros válidos, com presença completa e notas preenchidas quando necessário.
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
         else:
             st.success("✅ Sem valores nulos detectados nos dados filtrados")
 
@@ -712,6 +732,7 @@ def pagina_limpeza():
 
 def pagina_presenca():
     st.markdown('<p class="sub-header">✅ Análise de Presença/Faltantes</p>', unsafe_allow_html=True)
+    exibir_comparacao_padrao("Nesta aba, o indicador principal é a taxa percentual de presença e falta.")
 
     filter_clause = filtro_atual()
     faltas = metricas_por_grupo(filter_clause)
@@ -809,11 +830,13 @@ def pagina_presenca():
         plt.xticks(rotation=45, ha="right")
         st.pyplot(fig)
 
+    diff_falta = tabela_falta.iloc[0]["Diferença % (AM vs Outros)"]
     st.markdown(
-        """
-    <div style="background-color: black; color: white; padding: 15px; border-radius: 10px; font-size: 14px;">
-    <strong>🔍 INSIGHT:</strong><br>
-    A comparação de presença permite identificar diferenças regionais de comparecimento e possíveis desafios de acesso.
+        f"""
+    <div class="insight-box">
+    <strong>🔍 Comparação feita:</strong> AM vs Outros estados.<br>
+    Presença: {texto_comparativo(diff_pres)}.<br>
+    Faltas: {texto_comparativo(diff_falta)}.
     </div>
     """,
         unsafe_allow_html=True,
@@ -821,6 +844,7 @@ def pagina_presenca():
 
 def pagina_disciplinas():
     st.markdown('<p class="sub-header">📚 Desempenho por Disciplina</p>', unsafe_allow_html=True)
+    exibir_comparacao_padrao("Cada disciplina mostra nota original e percentual da escala para AM e Outros estados.")
 
     filter_clause = filtro_atual()
 
@@ -911,6 +935,7 @@ def pagina_disciplinas():
 
 def pagina_performers():
     st.markdown('<p class="sub-header">🏆 Top e Bottom Performers</p>', unsafe_allow_html=True)
+    exibir_comparacao_padrao("O desempenho médio e a quantidade de alunos no Top/Bottom 10% são comparados entre os grupos.")
 
     filter_clause = filtro_atual()
     limites = query_df(
@@ -935,7 +960,9 @@ def pagina_performers():
         SELECT
             GRUPO_AM,
             AVG(CASE WHEN MEDIA_NOTAS >= {p90} THEN MEDIA_NOTAS ELSE NULL END) AS media_top_10,
-            AVG(CASE WHEN MEDIA_NOTAS <= {p10} THEN MEDIA_NOTAS ELSE NULL END) AS media_bottom_10
+            AVG(CASE WHEN MEDIA_NOTAS <= {p10} THEN MEDIA_NOTAS ELSE NULL END) AS media_bottom_10,
+            SUM(CASE WHEN MEDIA_NOTAS >= {p90} THEN 1 ELSE 0 END) AS qtd_top_10,
+            SUM(CASE WHEN MEDIA_NOTAS <= {p10} THEN 1 ELSE 0 END) AS qtd_bottom_10
         FROM enem_notas
         {filter_clause}
         GROUP BY GRUPO_AM
@@ -951,10 +978,18 @@ def pagina_performers():
         dados = desempenho.loc[desempenho["GRUPO_AM"] == grupo, coluna]
         return float(dados.iloc[0]) if len(dados) and pd.notna(dados.iloc[0]) else np.nan
 
+    def inteiro_grupo(coluna, grupo):
+        dados = desempenho.loc[desempenho["GRUPO_AM"] == grupo, coluna]
+        return int(dados.iloc[0]) if len(dados) and pd.notna(dados.iloc[0]) else 0
+
     top_am = valor_grupo("media_top_10", GRUPO_AM)
     top_outros = valor_grupo("media_top_10", GRUPO_OUTROS)
     bottom_am = valor_grupo("media_bottom_10", GRUPO_AM)
     bottom_outros = valor_grupo("media_bottom_10", GRUPO_OUTROS)
+    top_qtd_am = inteiro_grupo("qtd_top_10", GRUPO_AM)
+    top_qtd_outros = inteiro_grupo("qtd_top_10", GRUPO_OUTROS)
+    bottom_qtd_am = inteiro_grupo("qtd_bottom_10", GRUPO_AM)
+    bottom_qtd_outros = inteiro_grupo("qtd_bottom_10", GRUPO_OUTROS)
 
     if any(pd.isna(v) for v in [top_am, top_outros, bottom_am, bottom_outros]):
         st.info("Os filtros atuais não retornaram dados suficientes para calcular as médias de Top/Bottom nos dois grupos.")
@@ -974,6 +1009,28 @@ def pagina_performers():
     with col2:
         st.metric("Corte Bottom 10%", f"{p10:.1f} pontos / {fmt_pct(p10 / ESCALA_NOTA * 100)}")
 
+    st.markdown("### 👥 Quantidade de alunos no Top/Bottom 10%")
+    quantidade_display = pd.DataFrame(
+        {
+            "Faixa": ["TOP 10%", "BOTTOM 10%"],
+            "AM (alunos)": [top_qtd_am, bottom_qtd_am],
+            "Outros estados (alunos)": [top_qtd_outros, bottom_qtd_outros],
+            "Diferença de quantidade % (AM vs Outros)": [
+                diferenca_percentual(top_qtd_am, top_qtd_outros),
+                diferenca_percentual(bottom_qtd_am, bottom_qtd_outros),
+            ],
+        }
+    )
+    st.dataframe(
+        quantidade_display.style.format({
+            "AM (alunos)": lambda v: fmt_int(v),
+            "Outros estados (alunos)": lambda v: fmt_int(v),
+            "Diferença de quantidade % (AM vs Outros)": "{:.2f}%",
+        }),
+        use_container_width=True,
+        hide_index=True,
+    )
+
     st.markdown("### 📊 Comparação de Desempenho por Região")
 
     top_bottom_display = pd.DataFrame(
@@ -983,6 +1040,8 @@ def pagina_performers():
             "AM %": [top_am / ESCALA_NOTA * 100, bottom_am / ESCALA_NOTA * 100],
             "Outros nota": [top_outros, bottom_outros],
             "Outros %": [top_outros / ESCALA_NOTA * 100, bottom_outros / ESCALA_NOTA * 100],
+            "AM alunos": [top_qtd_am, bottom_qtd_am],
+            "Outros alunos": [top_qtd_outros, bottom_qtd_outros],
             "Diferença %": [top_diff, bottom_diff],
         }
     )
@@ -993,6 +1052,8 @@ def pagina_performers():
             "AM %": "{:.2f}%",
             "Outros nota": "{:.2f}",
             "Outros %": "{:.2f}%",
+            "AM alunos": lambda v: fmt_int(v),
+            "Outros alunos": lambda v: fmt_int(v),
             "Diferença %": "{:.2f}%",
         }),
         use_container_width=True,
@@ -1003,6 +1064,7 @@ def pagina_performers():
         f"""
     <div class="insight-box">
     <strong>Leitura TOP 10%:</strong><br>
+    No AM, existem <strong>{fmt_int(top_qtd_am)}</strong> alunos no Top 10%. Nos outros estados, existem <strong>{fmt_int(top_qtd_outros)}</strong> alunos no Top 10%.<br>
     A média do Top 10% no AM é <strong>{top_am:.2f}</strong> pontos ({top_am / ESCALA_NOTA * 100:.2f}%).
     Nos outros estados, a média é <strong>{top_outros:.2f}</strong> pontos ({top_outros / ESCALA_NOTA * 100:.2f}%).
     Diferença relativa: <strong>{top_diff:.2f}%</strong>.
@@ -1015,6 +1077,7 @@ def pagina_performers():
         f"""
     <div class="insight-box">
     <strong>Leitura BOTTOM 10%:</strong><br>
+    No AM, existem <strong>{fmt_int(bottom_qtd_am)}</strong> alunos no Bottom 10%. Nos outros estados, existem <strong>{fmt_int(bottom_qtd_outros)}</strong> alunos no Bottom 10%.<br>
     A média do Bottom 10% no AM é <strong>{bottom_am:.2f}</strong> pontos ({bottom_am / ESCALA_NOTA * 100:.2f}%).
     Nos outros estados, a média é <strong>{bottom_outros:.2f}</strong> pontos ({bottom_outros / ESCALA_NOTA * 100:.2f}%).
     Diferença relativa: <strong>{bottom_diff:.2f}%</strong>.
@@ -1047,6 +1110,7 @@ def pagina_performers():
 
 def pagina_quartis():
     st.markdown('<p class="sub-header">📍 Quartis e Percentis</p>', unsafe_allow_html=True)
+    exibir_comparacao_padrao("A distribuição por quartil é percentual dentro de cada grupo.")
 
     filter_clause = filtro_atual()
 
@@ -1066,7 +1130,8 @@ def pagina_quartis():
             quantile_cont(MEDIA_NOTAS, 0.25) AS q1,
             quantile_cont(MEDIA_NOTAS, 0.50) AS q2,
             quantile_cont(MEDIA_NOTAS, 0.75) AS q3,
-            quantile_cont(MEDIA_NOTAS, 0.90) AS p90
+            quantile_cont(MEDIA_NOTAS, 0.90) AS p90,
+            MAX(MEDIA_NOTAS) AS max_nota
         FROM enem_notas
         {filter_clause}
         """
@@ -1083,7 +1148,7 @@ def pagina_quartis():
             {
                 "Quartil": ["Q1", "Q2", "Q3", "Q4"],
                 "Percentual acumulado": ["25%", "50%", "75%", "100%"],
-                "Valor da nota": [qs["q1"], qs["q2"], qs["q3"], "Maior valor"],
+                "Valor da nota": [qs["q1"], qs["q2"], qs["q3"], qs["max_nota"]],
                 "Interpretação": ["25% da base filtrada", "50% da base filtrada", "75% da base filtrada", "100% da base filtrada"],
             }
         )
@@ -1147,6 +1212,7 @@ def pagina_quartis():
 
 def pagina_redacao():
     st.markdown('<p class="sub-header">✍️ Comparativo de Redação</p>', unsafe_allow_html=True)
+    exibir_comparacao_padrao("A redação é comparada diretamente entre AM e Outros estados, com nota e percentual.")
 
     filter_clause = filtro_atual()
     metricas = query_df(
@@ -1304,6 +1370,7 @@ def pagina_redacao():
 
 def pagina_outliers():
     st.markdown('<p class="sub-header">🎯 Análise de Outliers</p>', unsafe_allow_html=True)
+    exibir_comparacao_padrao("Os outliers são comparados por percentual dentro de AM e Outros estados.")
 
     filter_clause = filtro_atual()
 
@@ -1442,6 +1509,7 @@ def pagina_outliers():
 
 def pagina_renda():
     st.markdown('<p class="sub-header">💰 Análise por Renda Familiar</p>', unsafe_allow_html=True)
+    exibir_comparacao_padrao("Cada faixa de renda compara a média do AM com a média dos Outros estados.")
 
     filter_clause = filtro_atual()
 
@@ -1532,6 +1600,7 @@ def pagina_renda():
 
 def pagina_nota_renda():
     st.markdown('<p class="sub-header">📈 Comparativo Nota x Renda</p>', unsafe_allow_html=True)
+    exibir_comparacao_padrao("A tendência renda x nota é calculada separadamente para AM e Outros estados.")
 
     filter_clause = filtro_atual()
     dados = query_df(
@@ -1660,6 +1729,7 @@ def pagina_nota_renda():
 
 def pagina_conclusoes():
     st.markdown('<p class="sub-header">🎯 Insights & Conclusões</p>', unsafe_allow_html=True)
+    exibir_comparacao_padrao("Os insights são gerados a partir das diferenças percentuais entre AM e Outros estados.")
 
     filter_clause = filtro_atual()
     insights = []
