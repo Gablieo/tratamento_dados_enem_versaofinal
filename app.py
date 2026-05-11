@@ -550,7 +550,7 @@ def pagina_home():
                 "Taxa de presença (%) - Outros estados": "{:.2f}%",
                 "Diferença % (AM vs Outros)": "{:.2f}%",
             }),
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
         )
     else:
@@ -628,7 +628,7 @@ def pagina_limpeza():
                     "Nulos (%) - Outros estados": "{:.2f}%",
                     "Diferença % (AM vs Outros)": "{:.2f}%",
                 }),
-                width="stretch",
+                use_container_width=True,
                 hide_index=True,
             )
             st.info("⚠️ Valores nulos detectados — as análises filtram notas ausentes quando necessário.")
@@ -644,7 +644,7 @@ def pagina_limpeza():
         ORDER BY Quantidade DESC
         """
     )
-    st.dataframe(tipos, width="stretch", hide_index=True)
+    st.dataframe(tipos, use_container_width=True, hide_index=True)
 
     st.markdown("### ✨ Variáveis Criadas para Análise")
     col1, col2 = st.columns(2)
@@ -692,7 +692,7 @@ def pagina_limpeza():
             "Status": ["✅", "✅", "✅", "✅", "✅"],
         }
     )
-    st.dataframe(checklist, width="stretch", hide_index=True)
+    st.dataframe(checklist, use_container_width=True, hide_index=True)
 
 def pagina_presenca():
     st.markdown('<p class="sub-header">✅ Análise de Presença/Faltantes</p>', unsafe_allow_html=True)
@@ -734,7 +734,7 @@ def pagina_presenca():
             "Faltaram": lambda v: fmt_int(v),
             "Total": lambda v: fmt_int(v),
         }),
-        width="stretch",
+        use_container_width=True,
         hide_index=True,
     )
 
@@ -747,7 +747,7 @@ def pagina_presenca():
                 "Presença (%) - Outros estados": "{:.2f}%",
                 "Diferença % (AM vs Outros)": "{:.2f}%",
             }),
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
         )
     with col2:
@@ -757,7 +757,7 @@ def pagina_presenca():
                 "Falta (%) - Outros estados": "{:.2f}%",
                 "Diferença % (AM vs Outros)": "{:.2f}%",
             }),
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
         )
 
@@ -826,7 +826,7 @@ def pagina_disciplinas():
             "Média (%) - Outros estados": "{:.2f}%",
             "Diferença % (AM vs Outros)": "{:.2f}%",
         }),
-        width="stretch",
+        use_container_width=True,
         hide_index=True,
     )
 
@@ -929,7 +929,7 @@ def pagina_performers():
                 "Top 10% (%) - Outros estados": "{:.2f}%",
                 "Diferença % (AM vs Outros)": "{:.2f}%",
             }),
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
         )
     with col2:
@@ -940,7 +940,7 @@ def pagina_performers():
                 "Bottom 10% (%) - Outros estados": "{:.2f}%",
                 "Diferença % (AM vs Outros)": "{:.2f}%",
             }),
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
         )
 
@@ -1006,7 +1006,7 @@ def pagina_quartis():
                 "Interpretação": ["25% da base filtrada", "50% da base filtrada", "75% da base filtrada", "100% da base filtrada"],
             }
         )
-        st.dataframe(quartis_df, width="stretch", hide_index=True)
+        st.dataframe(quartis_df, use_container_width=True, hide_index=True)
     with col2:
         percentis_df = pd.DataFrame(
             {
@@ -1015,7 +1015,7 @@ def pagina_quartis():
                 "Interpretação": ["10% abaixo", "25% abaixo", "50% abaixo", "75% abaixo", "90% abaixo"],
             }
         )
-        st.dataframe(percentis_df, width="stretch", hide_index=True)
+        st.dataframe(percentis_df, use_container_width=True, hide_index=True)
 
     q1, q2, q3 = float(qs["q1"]), float(qs["q2"]), float(qs["q3"])
     quartil_grupo = query_df(
@@ -1040,7 +1040,7 @@ def pagina_quartis():
     tabela_pct = tabela_abs.div(tabela_abs.sum(axis=1), axis=0) * 100
 
     st.markdown("### 📈 Distribuição por Quartil")
-    st.dataframe(tabela_pct.style.format("{:.2f}%"), width="stretch")
+    st.dataframe(tabela_pct.style.format("{:.2f}%"), use_container_width=True)
 
     fig, ax = plt.subplots(figsize=(12, 6))
     tabela_pct.T.plot(kind="bar", ax=ax, color=["#3da700", "#3C00E0"], width=0.7)
@@ -1105,7 +1105,7 @@ def pagina_redacao():
             "Média 4 Provas (%) - Outros estados": "{:.2f}%",
             "Diferença % (AM vs Outros)": "{:.2f}%",
         }),
-        width="stretch",
+        use_container_width=True,
         hide_index=True,
     )
 
@@ -1261,7 +1261,7 @@ def pagina_outliers():
     tabela_pct = tabela_abs.div(tabela_abs.sum(axis=1), axis=0) * 100
 
     st.markdown("### 📍 Distribuição por Região")
-    st.dataframe(tabela_pct.style.format("{:.2f}%"), width="stretch")
+    st.dataframe(tabela_pct.style.format("{:.2f}%"), use_container_width=True)
 
     st.markdown("### 📈 Visualização")
     col1, col2 = st.columns(2)
@@ -1366,7 +1366,7 @@ def pagina_renda():
             "Média (%) - Outros estados": "{:.2f}%",
             "Diferença % (AM vs Outros)": "{:.2f}%",
         }),
-        width="stretch",
+        use_container_width=True,
         hide_index=True,
     )
 
@@ -1447,7 +1447,7 @@ def pagina_nota_renda():
             "Média (%) - Outros estados": "{:.2f}%",
             "Diferença % (AM vs Outros)": "{:.2f}%",
         }),
-        width="stretch",
+        use_container_width=True,
         hide_index=True,
     )
 
@@ -1677,7 +1677,7 @@ def pagina_conclusoes():
                     "Outros estados": "{:.2f}",
                     "Diferença % (AM vs Outros)": "{:.2f}%",
                 }),
-                width="stretch",
+                use_container_width=True,
                 hide_index=True,
             )
 
