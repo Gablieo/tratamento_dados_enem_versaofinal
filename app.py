@@ -273,6 +273,11 @@ def fmt_int(valor):
 def fmt_float(valor, casas=2):
     return f"{float(valor):.{casas}f}"
 
+def fmt_nota(valor, casas=1):
+    if pd.isna(valor):
+        return "Sem dados"
+    return f"{float(valor):.{casas}f}"
+
 def fmt_pct(valor, casas=2):
     if pd.isna(valor):
         return "Sem dados"
@@ -419,7 +424,7 @@ def metricas_gerais(filter_clause=""):
         f"""
         SELECT
             COUNT(*) AS total,
-            SUM(CASE WHEN FALTOU = FALSE THEN 1 ELSE 0 END) AS comparecidos,
+            SUM(CASE WHEN FALTOU = FALSE THEN 1 ELSE 0 END) AS presentes,
             SUM(CASE WHEN FALTOU = TRUE THEN 1 ELSE 0 END) AS faltantes,
             COUNT(*) FILTER (WHERE GRUPO_AM = 'Amazonas') AS amazonas,
             COUNT(*) FILTER (WHERE GRUPO_AM = 'Outros estados') AS outros
@@ -435,7 +440,7 @@ def metricas_por_grupo(filter_clause=""):
         SELECT
             GRUPO_AM,
             COUNT(*) AS total,
-            SUM(CASE WHEN FALTOU = FALSE THEN 1 ELSE 0 END) AS comparecidos,
+            SUM(CASE WHEN FALTOU = FALSE THEN 1 ELSE 0 END) AS presentes,
             SUM(CASE WHEN FALTOU = TRUE THEN 1 ELSE 0 END) AS faltantes,
             (SUM(CASE WHEN FALTOU = FALSE THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) AS taxa_comparecimento_pct,
             (SUM(CASE WHEN FALTOU = TRUE THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) AS taxa_falta_pct
@@ -529,16 +534,16 @@ def pagina_home():
     with col2:
         m = metricas_gerais(filter_clause)
         total = int(m["total"])
-        comparecidos = int(m["comparecidos"])
+        presentes = int(m["presentes"])
         faltantes = int(m["faltantes"])
 
         col2a, col2b = st.columns(2)
         with col2a:
             st.metric("Total de Registros", fmt_int(total))
-            st.metric("Comparecidos", fmt_int(comparecidos))
+            st.metric("Presentes", fmt_int(presentes))
         with col2b:
             st.metric("Faltantes", fmt_int(faltantes))
-            st.metric("Taxa de Comparecimento", f"{comparecidos / total * 100:.2f}%" if total else "Sem dados")
+            st.metric("Taxa de Comparecimento", f"{presentes / total * 100:.2f}%" if total else "Sem dados")
 
     st.markdown("---")
 
@@ -652,7 +657,7 @@ def pagina_limpeza():
     col1, col2 = st.columns(2)
 
     with col1:
-        comparecidos = int(m["comparecidos"])
+        presentes = int(m["presentes"])
         faltantes = int(m["faltantes"])
         st.markdown(
             f"""
@@ -661,7 +666,7 @@ def pagina_limpeza():
         - False: Compareceu em todas as provas
 
         Distribuição filtrada:
-        - Compareceram: {fmt_int(comparecidos)} ({comparecidos/total*100:.2f}% se houver dados)
+        - Presentes: {fmt_int(presentes)} ({presentes/total*100:.2f}% se houver dados)
         - Faltaram: {fmt_int(faltantes)} ({faltantes/total*100:.2f}% se houver dados)
         """ if total else "**FALTOU**: sem dados nos filtros atuais."
         )
@@ -721,18 +726,18 @@ def pagina_presenca():
         st.metric("Diferença AM vs Outros", fmt_pct(diff_pres))
 
     st.markdown("### 🔢 Números inteiros de presença e faltantes")
-    numeros_presenca = faltas[["GRUPO_AM", "comparecidos", "faltantes", "total"]].copy()
+    numeros_presenca = faltas[["GRUPO_AM", "presentes", "faltantes", "total"]].copy()
     numeros_presenca = numeros_presenca.rename(
         columns={
             "GRUPO_AM": "Região",
-            "comparecidos": "Compareceram",
+            "presentes": "Presentes",
             "faltantes": "Faltaram",
             "total": "Total",
         }
     )
     st.dataframe(
         numeros_presenca.style.format({
-            "Compareceram": lambda v: fmt_int(v),
+            "Presentes": lambda v: fmt_int(v),
             "Faltaram": lambda v: fmt_int(v),
             "Total": lambda v: fmt_int(v),
         }),
@@ -819,12 +824,36 @@ def pagina_disciplinas():
     registros = []
     for nome, col in DISCIPLINAS.items():
         for _, linha in medias_grupo.iterrows():
-            registros.append({"Disciplina": nome, "GRUPO_AM": linha["GRUPO_AM"], "Média (%)": linha[col] / ESCALA_NOTA * 100})
+            registros.append({
+                "Disciplina": nome,
+                "GRUPO_AM": linha["GRUPO_AM"],
+                "Média (nota)": linha[col],
+                "Média (%)": linha[col] / ESCALA_NOTA * 100,
+            })
     stats = pd.DataFrame(registros)
     tabela = tabela_comparativa_grupos(stats, "Média (%)", "Média (%)", "Disciplina")
+    tabela_nota = tabela_comparativa_grupos(stats, "Média (nota)", "Média (nota)", "Disciplina")
+    tabela_display = tabela.merge(
+        tabela_nota[["Disciplina", "Média (nota) - AM", "Média (nota) - Outros estados"]],
+        on="Disciplina",
+        how="left",
+    )
+    tabela_display = tabela_display[
+        [
+            "Disciplina",
+            "Média (nota) - AM",
+            "Média (%) - AM",
+            "Média (nota) - Outros estados",
+            "Média (%) - Outros estados",
+            "Diferença % (AM vs Outros)",
+            "Leitura",
+        ]
+    ]
     st.dataframe(
-        tabela.style.format({
+        tabela_display.style.format({
+            "Média (nota) - AM": "{:.2f}",
             "Média (%) - AM": "{:.2f}%",
+            "Média (nota) - Outros estados": "{:.2f}",
             "Média (%) - Outros estados": "{:.2f}%",
             "Diferença % (AM vs Outros)": "{:.2f}%",
         }),
@@ -865,7 +894,7 @@ def pagina_disciplinas():
         """
     <div class="warning-box" style="background-color: #1e1e2f; color: #ffffff; padding: 15px; border-radius: 10px; border-left: 5px solid #ffb000;">
     <strong>⚠️ ACHADO IMPORTANTE:</strong><br>
-    As médias são calculadas usando todos os registros válidos do arquivo completo e comparadas sempre entre AM e Outros estados.
+    As médias são calculadas usando todos os registros válidos do arquivo completo e comparadas sempre entre AM e Outros estados. A tabela mostra a nota original e o percentual da escala.
     </div>
     """,
         unsafe_allow_html=True,
@@ -911,23 +940,60 @@ def pagina_performers():
 
     desempenho["Top 10% (%)"] = desempenho["media_top_10"] / ESCALA_NOTA * 100
     desempenho["Bottom 10% (%)"] = desempenho["media_bottom_10"] / ESCALA_NOTA * 100
+    desempenho["Top 10% (nota)"] = desempenho["media_top_10"]
+    desempenho["Bottom 10% (nota)"] = desempenho["media_bottom_10"]
 
     top_tabela = tabela_comparativa_grupos(desempenho, "Top 10% (%)", "Top 10% (%)")
     bottom_tabela = tabela_comparativa_grupos(desempenho, "Bottom 10% (%)", "Bottom 10% (%)")
+    top_tabela_nota = tabela_comparativa_grupos(desempenho, "Top 10% (nota)", "Top 10% (nota)")
+    bottom_tabela_nota = tabela_comparativa_grupos(desempenho, "Bottom 10% (nota)", "Bottom 10% (nota)")
+
+    top_display = top_tabela.merge(
+        top_tabela_nota[["Comparação", "Top 10% (nota) - AM", "Top 10% (nota) - Outros estados"]],
+        on="Comparação",
+        how="left",
+    )[
+        [
+            "Comparação",
+            "Top 10% (nota) - AM",
+            "Top 10% (%) - AM",
+            "Top 10% (nota) - Outros estados",
+            "Top 10% (%) - Outros estados",
+            "Diferença % (AM vs Outros)",
+            "Leitura",
+        ]
+    ]
+    bottom_display = bottom_tabela.merge(
+        bottom_tabela_nota[["Comparação", "Bottom 10% (nota) - AM", "Bottom 10% (nota) - Outros estados"]],
+        on="Comparação",
+        how="left",
+    )[
+        [
+            "Comparação",
+            "Bottom 10% (nota) - AM",
+            "Bottom 10% (%) - AM",
+            "Bottom 10% (nota) - Outros estados",
+            "Bottom 10% (%) - Outros estados",
+            "Diferença % (AM vs Outros)",
+            "Leitura",
+        ]
+    ]
 
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("Corte Top 10%", fmt_pct(p90 / ESCALA_NOTA * 100))
+        st.metric("Corte Top 10%", f"{p90:.1f} pontos / {fmt_pct(p90 / ESCALA_NOTA * 100)}")
     with col2:
-        st.metric("Corte Bottom 10%", fmt_pct(p10 / ESCALA_NOTA * 100))
+        st.metric("Corte Bottom 10%", f"{p10:.1f} pontos / {fmt_pct(p10 / ESCALA_NOTA * 100)}")
 
     st.markdown("### 📊 Comparação de Desempenho por Região")
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("**TOP 10% (Média de desempenho)**")
         st.dataframe(
-            top_tabela.style.format({
+            top_display.style.format({
+                "Top 10% (nota) - AM": "{:.2f}",
                 "Top 10% (%) - AM": "{:.2f}%",
+                "Top 10% (nota) - Outros estados": "{:.2f}",
                 "Top 10% (%) - Outros estados": "{:.2f}%",
                 "Diferença % (AM vs Outros)": "{:.2f}%",
             }),
@@ -937,8 +1003,10 @@ def pagina_performers():
     with col2:
         st.markdown("**BOTTOM 10% (Média de desempenho)**")
         st.dataframe(
-            bottom_tabela.style.format({
+            bottom_display.style.format({
+                "Bottom 10% (nota) - AM": "{:.2f}",
                 "Bottom 10% (%) - AM": "{:.2f}%",
+                "Bottom 10% (nota) - Outros estados": "{:.2f}",
                 "Bottom 10% (%) - Outros estados": "{:.2f}%",
                 "Diferença % (AM vs Outros)": "{:.2f}%",
             }),
@@ -1005,19 +1073,29 @@ def pagina_quartis():
             {
                 "Quartil": ["Q1", "Q2", "Q3", "Q4"],
                 "Percentual acumulado": ["25%", "50%", "75%", "100%"],
+                "Valor da nota": [qs["q1"], qs["q2"], qs["q3"], "Maior valor"],
                 "Interpretação": ["25% da base filtrada", "50% da base filtrada", "75% da base filtrada", "100% da base filtrada"],
             }
         )
-        st.dataframe(quartis_df, use_container_width=True, hide_index=True)
+        st.dataframe(
+            quartis_df.style.format({"Valor da nota": lambda v: f"{v:.2f}" if isinstance(v, (int, float, np.floating)) else v}),
+            use_container_width=True,
+            hide_index=True,
+        )
     with col2:
         percentis_df = pd.DataFrame(
             {
                 "Percentil": ["P10", "P25", "P50", "P75", "P90"],
                 "Percentual acumulado": ["10%", "25%", "50%", "75%", "90%"],
+                "Valor da nota": [qs["p10"], qs["q1"], qs["q2"], qs["q3"], qs["p90"]],
                 "Interpretação": ["10% abaixo", "25% abaixo", "50% abaixo", "75% abaixo", "90% abaixo"],
             }
         )
-        st.dataframe(percentis_df, use_container_width=True, hide_index=True)
+        st.dataframe(
+            percentis_df.style.format({"Valor da nota": "{:.2f}"}),
+            use_container_width=True,
+            hide_index=True,
+        )
 
     q1, q2, q3 = float(qs["q1"]), float(qs["q2"]), float(qs["q3"])
     quartil_grupo = query_df(
@@ -1081,16 +1159,23 @@ def pagina_redacao():
         st.info("Os filtros atuais não retornaram dados suficientes para comparar AM vs Outros estados.")
         return
 
+    metricas["Redação (nota)"] = metricas["media_redacao"]
+    metricas["Média 4 Provas (nota)"] = metricas["media_4_provas"]
     metricas["Redação (%)"] = metricas["media_redacao"] / ESCALA_NOTA * 100
     metricas["Média 4 Provas (%)"] = metricas["media_4_provas"] / ESCALA_NOTA * 100
     tabela_red = tabela_comparativa_grupos(metricas, "Redação (%)", "Redação (%)")
     tabela_media4 = tabela_comparativa_grupos(metricas, "Média 4 Provas (%)", "Média 4 Provas (%)")
+    tabela_red_nota = tabela_comparativa_grupos(metricas, "Redação (nota)", "Redação (nota)")
+    tabela_media4_nota = tabela_comparativa_grupos(metricas, "Média 4 Provas (nota)", "Média 4 Provas (nota)")
+
+    red_am_nota = tabela_red_nota.iloc[0]["Redação (nota) - AM"]
+    red_outros_nota = tabela_red_nota.iloc[0]["Redação (nota) - Outros estados"]
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Redação AM", fmt_pct(tabela_red.iloc[0]["Redação (%) - AM"]))
+        st.metric("Redação AM", f"{red_am_nota:.1f} pts / {fmt_pct(tabela_red.iloc[0]['Redação (%) - AM'])}")
     with col2:
-        st.metric("Redação Outros", fmt_pct(tabela_red.iloc[0]["Redação (%) - Outros estados"]))
+        st.metric("Redação Outros", f"{red_outros_nota:.1f} pts / {fmt_pct(tabela_red.iloc[0]['Redação (%) - Outros estados'])}")
     with col3:
         st.metric("Diferença Redação", fmt_pct(tabela_red.iloc[0]["Diferença % (AM vs Outros)"]))
     with col4:
@@ -1098,13 +1183,22 @@ def pagina_redacao():
         st.metric("Correlação AM", f"{corr_am:.3f}" if pd.notna(corr_am) else "Sem dados")
 
     st.markdown("### 📊 Comparação por Região")
-    redacao_comp = pd.concat([tabela_red, tabela_media4], ignore_index=True)
+    redacao_comp = pd.DataFrame(
+        {
+            "Indicador": ["Redação", "Média 4 Provas"],
+            "Nota - AM": [tabela_red_nota.iloc[0]["Redação (nota) - AM"], tabela_media4_nota.iloc[0]["Média 4 Provas (nota) - AM"]],
+            "Percentual - AM": [tabela_red.iloc[0]["Redação (%) - AM"], tabela_media4.iloc[0]["Média 4 Provas (%) - AM"]],
+            "Nota - Outros estados": [tabela_red_nota.iloc[0]["Redação (nota) - Outros estados"], tabela_media4_nota.iloc[0]["Média 4 Provas (nota) - Outros estados"]],
+            "Percentual - Outros estados": [tabela_red.iloc[0]["Redação (%) - Outros estados"], tabela_media4.iloc[0]["Média 4 Provas (%) - Outros estados"]],
+            "Diferença % (AM vs Outros)": [tabela_red.iloc[0]["Diferença % (AM vs Outros)"], tabela_media4.iloc[0]["Diferença % (AM vs Outros)"]],
+        }
+    )
     st.dataframe(
         redacao_comp.style.format({
-            "Redação (%) - AM": "{:.2f}%",
-            "Redação (%) - Outros estados": "{:.2f}%",
-            "Média 4 Provas (%) - AM": "{:.2f}%",
-            "Média 4 Provas (%) - Outros estados": "{:.2f}%",
+            "Nota - AM": "{:.2f}",
+            "Percentual - AM": "{:.2f}%",
+            "Nota - Outros estados": "{:.2f}",
+            "Percentual - Outros estados": "{:.2f}%",
             "Diferença % (AM vs Outros)": "{:.2f}%",
         }),
         use_container_width=True,
@@ -1234,13 +1328,13 @@ def pagina_outliers():
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Q1", fmt_pct(q1 / ESCALA_NOTA * 100))
+        st.metric("Q1", f"{q1:.1f} pts / {fmt_pct(q1 / ESCALA_NOTA * 100)}")
     with col2:
-        st.metric("Q3", fmt_pct(q3 / ESCALA_NOTA * 100))
+        st.metric("Q3", f"{q3:.1f} pts / {fmt_pct(q3 / ESCALA_NOTA * 100)}")
     with col3:
-        st.metric("Lower Bound", fmt_pct(lower_bound / ESCALA_NOTA * 100))
+        st.metric("Lower Bound", f"{lower_bound:.1f} pts / {fmt_pct(lower_bound / ESCALA_NOTA * 100)}")
     with col4:
-        st.metric("Upper Bound", fmt_pct(upper_bound / ESCALA_NOTA * 100))
+        st.metric("Upper Bound", f"{upper_bound:.1f} pts / {fmt_pct(upper_bound / ESCALA_NOTA * 100)}")
 
     outliers = query_df(
         f"""
@@ -1296,8 +1390,8 @@ def pagina_outliers():
         for patch, cor in zip(bp["boxes"], ["#3da700", "#3C00E0"]):
             patch.set_facecolor(cor)
             patch.set_alpha(0.7)
-        ax.axhline(upper_bound / ESCALA_NOTA * 100, color="red", linestyle="--", linewidth=2, label=f"Upper Bound: {upper_bound / ESCALA_NOTA * 100:.1f}%")
-        ax.axhline(lower_bound / ESCALA_NOTA * 100, color="orange", linestyle="--", linewidth=2, label=f"Lower Bound: {lower_bound / ESCALA_NOTA * 100:.1f}%")
+        ax.axhline(upper_bound / ESCALA_NOTA * 100, color="red", linestyle="--", linewidth=2, label=f"Upper Bound: {upper_bound:.1f} pts / {upper_bound / ESCALA_NOTA * 100:.1f}%")
+        ax.axhline(lower_bound / ESCALA_NOTA * 100, color="orange", linestyle="--", linewidth=2, label=f"Lower Bound: {lower_bound:.1f} pts / {lower_bound / ESCALA_NOTA * 100:.1f}%")
         ax.set_title("Boxplot com Limites de Outliers", fontweight="bold")
         ax.set_ylabel("Média de Notas (%)")
         ax.legend(fontsize=8)
@@ -1319,9 +1413,9 @@ def pagina_outliers():
     media = query_df(f"SELECT AVG(MEDIA_NOTAS) AS media FROM enem_notas {filter_clause}").iloc[0]["media"]
     fig, ax = plt.subplots(figsize=(12, 6))
     hist_pivot.plot(kind="bar", ax=ax, color=["#3da700", "#3C00E0"], alpha=0.6)
-    ax.axvline(lower_bound / ESCALA_NOTA * 100, color="orange", linestyle="--", linewidth=2.5, label=f"Lower Bound: {lower_bound / ESCALA_NOTA * 100:.1f}%")
-    ax.axvline(upper_bound / ESCALA_NOTA * 100, color="red", linestyle="--", linewidth=2.5, label=f"Upper Bound: {upper_bound / ESCALA_NOTA * 100:.1f}%")
-    ax.axvline(media / ESCALA_NOTA * 100, color="black", linestyle="-", linewidth=2, label=f"Média: {media / ESCALA_NOTA * 100:.1f}%")
+    ax.axvline(lower_bound / ESCALA_NOTA * 100, color="orange", linestyle="--", linewidth=2.5, label=f"Lower Bound: {lower_bound:.1f} pts / {lower_bound / ESCALA_NOTA * 100:.1f}%")
+    ax.axvline(upper_bound / ESCALA_NOTA * 100, color="red", linestyle="--", linewidth=2.5, label=f"Upper Bound: {upper_bound:.1f} pts / {upper_bound / ESCALA_NOTA * 100:.1f}%")
+    ax.axvline(media / ESCALA_NOTA * 100, color="black", linestyle="-", linewidth=2, label=f"Média: {media:.1f} pts / {media / ESCALA_NOTA * 100:.1f}%")
     ax.set_title("Distribuição Percentual com Zonas de Outliers", fontweight="bold", fontsize=12)
     ax.set_xlabel("Média de Notas (%)")
     ax.set_ylabel("Percentual da distribuição (%)")
@@ -1358,13 +1452,33 @@ def pagina_renda():
         st.info("Os filtros atuais não retornaram dados para a análise por renda.")
         return
 
+    renda_analise["Média (nota)"] = renda_analise["media_notas"]
     renda_analise["media_notas_pct"] = renda_analise["media_notas"] / ESCALA_NOTA * 100
     tabela = tabela_comparativa_grupos(renda_analise, "media_notas_pct", "Média (%)", "RENDA")
+    tabela_nota = tabela_comparativa_grupos(renda_analise, "Média (nota)", "Média (nota)", "RENDA")
+    tabela = tabela.merge(
+        tabela_nota[["RENDA", "Média (nota) - AM", "Média (nota) - Outros estados"]],
+        on="RENDA",
+        how="left",
+    )
     tabela["RENDA"] = pd.Categorical(tabela["RENDA"], categories=RENDA_ORDEM, ordered=True)
     tabela = tabela.sort_values("RENDA")
+    tabela_display = tabela[
+        [
+            "RENDA",
+            "Média (nota) - AM",
+            "Média (%) - AM",
+            "Média (nota) - Outros estados",
+            "Média (%) - Outros estados",
+            "Diferença % (AM vs Outros)",
+            "Leitura",
+        ]
+    ]
     st.dataframe(
-        tabela.style.format({
+        tabela_display.style.format({
+            "Média (nota) - AM": "{:.2f}",
             "Média (%) - AM": "{:.2f}%",
+            "Média (nota) - Outros estados": "{:.2f}",
             "Média (%) - Outros estados": "{:.2f}%",
             "Diferença % (AM vs Outros)": "{:.2f}%",
         }),
@@ -1391,6 +1505,8 @@ def pagina_renda():
     <div class="warning-box" style="background-color: #1e1e2f; color: #ffffff; padding: 15px; border-radius: 10px; border-left: 5px solid #ff4b4b;">
     <strong>🚨 ACHADO CRÍTICO - DESIGUALDADE SOCIAL:</strong><br>
     • Maior diferença relativa encontrada na faixa: {maior_gap['RENDA']}<br>
+    • AM: {maior_gap['Média (nota) - AM']:.1f} pontos ({maior_gap['Média (%) - AM']:.1f}%)<br>
+    • Outros estados: {maior_gap['Média (nota) - Outros estados']:.1f} pontos ({maior_gap['Média (%) - Outros estados']:.1f}%)<br>
     • Diferença AM vs Outros estados: {maior_gap['Diferença % (AM vs Outros)']:.1f}%
     </div>
     """,
@@ -1414,6 +1530,7 @@ def pagina_nota_renda():
                 WHEN 'M' THEN 13 WHEN 'N' THEN 14 WHEN 'O' THEN 15 WHEN 'P' THEN 16
                 WHEN 'Q' THEN 17 ELSE NULL
             END AS renda_ordem,
+            AVG(MEDIA_NOTAS) AS media_notas,
             AVG(MEDIA_NOTAS) / {ESCALA_NOTA} * 100 AS media_notas_pct
         FROM enem_notas
         {filter_clause}
@@ -1441,11 +1558,30 @@ def pagina_nota_renda():
 
     st.markdown("### 📊 Diferença percentual por faixa de renda")
     tabela = tabela_comparativa_grupos(dados, "media_notas_pct", "Média (%)", "RENDA")
+    tabela_nota = tabela_comparativa_grupos(dados, "media_notas", "Média (nota)", "RENDA")
+    tabela = tabela.merge(
+        tabela_nota[["RENDA", "Média (nota) - AM", "Média (nota) - Outros estados"]],
+        on="RENDA",
+        how="left",
+    )
     tabela["RENDA"] = pd.Categorical(tabela["RENDA"], categories=RENDA_ORDEM, ordered=True)
     tabela = tabela.sort_values("RENDA")
+    tabela_display = tabela[
+        [
+            "RENDA",
+            "Média (nota) - AM",
+            "Média (%) - AM",
+            "Média (nota) - Outros estados",
+            "Média (%) - Outros estados",
+            "Diferença % (AM vs Outros)",
+            "Leitura",
+        ]
+    ]
     st.dataframe(
-        tabela.style.format({
+        tabela_display.style.format({
+            "Média (nota) - AM": "{:.2f}",
             "Média (%) - AM": "{:.2f}%",
+            "Média (nota) - Outros estados": "{:.2f}",
             "Média (%) - Outros estados": "{:.2f}%",
             "Diferença % (AM vs Outros)": "{:.2f}%",
         }),
@@ -1511,6 +1647,8 @@ def pagina_conclusoes():
     filter_clause = filtro_atual()
     insights = []
 
+    aba_resumo, aba_elite, aba_sexo = st.tabs(["📌 Resumo geral", "🏆 Elite e renda", "👥 Sexo e padrões"])
+
     presenca = metricas_por_grupo(filter_clause)
     if len(presenca) >= 2:
         comp_falta = tabela_comparativa_grupos(presenca, "taxa_falta_pct", "Falta (%)")
@@ -1521,8 +1659,11 @@ def pagina_conclusoes():
         f"""
         SELECT
             GRUPO_AM,
+            AVG(MEDIA_NOTAS) AS media_notas,
             AVG(MEDIA_NOTAS) / {ESCALA_NOTA} * 100 AS media_notas_pct,
+            AVG(NU_NOTA_REDACAO) AS redacao,
             AVG(NU_NOTA_REDACAO) / {ESCALA_NOTA} * 100 AS redacao_pct,
+            AVG(NU_NOTA_MT) AS matematica,
             AVG(NU_NOTA_MT) / {ESCALA_NOTA} * 100 AS matematica_pct
         FROM enem_notas
         {filter_clause}
@@ -1530,8 +1671,26 @@ def pagina_conclusoes():
         ORDER BY GRUPO_AM
         """
     )
+    tabela_media = pd.DataFrame()
     if len(medias) >= 2:
-        tabela_media = tabela_comparativa_grupos(medias, "media_notas_pct", "Média geral (%)")
+        tabela_media_pct = tabela_comparativa_grupos(medias, "media_notas_pct", "Média geral (%)")
+        tabela_media_nota = tabela_comparativa_grupos(medias, "media_notas", "Média geral (nota)")
+        tabela_media = tabela_media_pct.merge(
+            tabela_media_nota[["Comparação", "Média geral (nota) - AM", "Média geral (nota) - Outros estados"]],
+            on="Comparação",
+            how="left",
+        )
+        tabela_media = tabela_media[
+            [
+                "Comparação",
+                "Média geral (nota) - AM",
+                "Média geral (%) - AM",
+                "Média geral (nota) - Outros estados",
+                "Média geral (%) - Outros estados",
+                "Diferença % (AM vs Outros)",
+                "Leitura",
+            ]
+        ]
         diff_media = tabela_media.iloc[0]["Diferença % (AM vs Outros)"]
         insights.append(texto_comparativo(diff_media).replace("AM", "O desempenho médio do AM"))
 
@@ -1547,14 +1706,56 @@ def pagina_conclusoes():
             insights.append("O gap entre redação e matemática é maior nos outros estados do que no AM.")
 
     corr = correlacao_renda_nota(filter_clause)
-    if len(corr) >= 2:
-        corr_am = corr.loc[corr["GRUPO_AM"] == GRUPO_AM, "correlacao"].iloc[0] if GRUPO_AM in corr["GRUPO_AM"].values else np.nan
-        corr_outros = corr.loc[corr["GRUPO_AM"] == GRUPO_OUTROS, "correlacao"].iloc[0] if GRUPO_OUTROS in corr["GRUPO_AM"].values else np.nan
-        if pd.notna(corr_am) and pd.notna(corr_outros):
-            if abs(corr_am) > abs(corr_outros):
-                insights.append("A correlação entre renda e desempenho é mais forte no AM.")
-            elif abs(corr_am) < abs(corr_outros):
-                insights.append("A correlação entre renda e desempenho é mais forte nos outros estados.")
+    corr_am = corr.loc[corr["GRUPO_AM"] == GRUPO_AM, "correlacao"].iloc[0] if len(corr) >= 2 and GRUPO_AM in corr["GRUPO_AM"].values else np.nan
+    corr_outros = corr.loc[corr["GRUPO_AM"] == GRUPO_OUTROS, "correlacao"].iloc[0] if len(corr) >= 2 and GRUPO_OUTROS in corr["GRUPO_AM"].values else np.nan
+    if pd.notna(corr_am) and pd.notna(corr_outros):
+        if abs(corr_am) > abs(corr_outros):
+            insights.append("A correlação entre renda e desempenho é mais forte no AM.")
+        elif abs(corr_am) < abs(corr_outros):
+            insights.append("A correlação entre renda e desempenho é mais forte nos outros estados.")
+
+    with aba_resumo:
+        st.markdown("### 🔍 Observações estatísticas geradas pelos dados filtrados")
+        if insights:
+            for insight in insights:
+                st.markdown(
+                    f"""
+                <div class="insight-box">
+                {insight}
+                </div>
+                """,
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.info("Os filtros atuais não retornaram dados suficientes para gerar insights comparativos.")
+
+        if not tabela_media.empty:
+            st.markdown("### 📊 Média geral: nota inteira e percentual")
+            st.dataframe(
+                tabela_media.style.format({
+                    "Média geral (nota) - AM": "{:.2f}",
+                    "Média geral (%) - AM": "{:.2f}%",
+                    "Média geral (nota) - Outros estados": "{:.2f}",
+                    "Média geral (%) - Outros estados": "{:.2f}%",
+                    "Diferença % (AM vs Outros)": "{:.2f}%",
+                }),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        st.markdown(
+            """
+
+        ---
+
+        ✅ Arquivo completo processado  
+        ✅ Metadados validados  
+        ✅ Consultas agregadas otimizadas  
+        ✅ Comparações feitas sempre como AM vs Outros estados  
+        ✅ Filtros globais aplicados às análises  
+        ✅ Notas exibidas em percentual e em valor original quando aplicável
+        """
+        )
 
     elite_renda_nota = query_df(
         f"""
@@ -1589,6 +1790,7 @@ def pagina_conclusoes():
         resumo AS (
             SELECT
                 GRUPO_AM,
+                AVG(MEDIA_NOTAS) AS nota_elite,
                 AVG(MEDIA_NOTAS) / {ESCALA_NOTA} * 100 AS nota_elite_pct,
                 AVG(renda_ordem) AS renda_media_ordem
             FROM elite
@@ -1613,6 +1815,7 @@ def pagina_conclusoes():
         )
         SELECT
             r.GRUPO_AM,
+            r.nota_elite,
             r.nota_elite_pct,
             r.renda_media_ordem,
             p.renda_predominante,
@@ -1623,84 +1826,84 @@ def pagina_conclusoes():
         """
     )
 
-    if len(elite_renda_nota) >= 2:
-        elite_am = elite_renda_nota[elite_renda_nota["GRUPO_AM"] == GRUPO_AM].iloc[0] if GRUPO_AM in elite_renda_nota["GRUPO_AM"].values else None
-        elite_outros = elite_renda_nota[elite_renda_nota["GRUPO_AM"] == GRUPO_OUTROS].iloc[0] if GRUPO_OUTROS in elite_renda_nota["GRUPO_AM"].values else None
+    with aba_elite:
+        if len(elite_renda_nota) >= 2:
+            elite_am = elite_renda_nota[elite_renda_nota["GRUPO_AM"] == GRUPO_AM].iloc[0] if GRUPO_AM in elite_renda_nota["GRUPO_AM"].values else None
+            elite_outros = elite_renda_nota[elite_renda_nota["GRUPO_AM"] == GRUPO_OUTROS].iloc[0] if GRUPO_OUTROS in elite_renda_nota["GRUPO_AM"].values else None
 
-        if elite_am is not None and elite_outros is not None:
-            diff_nota_elite = diferenca_percentual(elite_am["nota_elite_pct"], elite_outros["nota_elite_pct"])
-            diff_renda_elite = diferenca_percentual(elite_am["renda_media_ordem"], elite_outros["renda_media_ordem"])
+            if elite_am is not None and elite_outros is not None:
+                diff_nota_elite = diferenca_percentual(elite_am["nota_elite"], elite_outros["nota_elite"])
+                diff_renda_elite = diferenca_percentual(elite_am["renda_media_ordem"], elite_outros["renda_media_ordem"])
+                renda_am = elite_am.get("renda_predominante", np.nan)
+                renda_outros = elite_outros.get("renda_predominante", np.nan)
+                pct_renda_am = elite_am.get("percentual_renda_predominante", np.nan)
+                pct_renda_outros = elite_outros.get("percentual_renda_predominante", np.nan)
 
-            insights.append(
-                f"Na elite de desempenho, a média de notas do AM está {abs(diff_nota_elite):.2f}% "
-                f"{'acima' if diff_nota_elite > 0 else 'abaixo' if diff_nota_elite < 0 else 'igual'} da elite dos outros estados."
-            )
-
-            if pd.notna(diff_renda_elite):
-                insights.append(
-                    f"Na elite, o indicador médio de renda do AM está {abs(diff_renda_elite):.2f}% "
-                    f"{'acima' if diff_renda_elite > 0 else 'abaixo' if diff_renda_elite < 0 else 'igual'} do indicador médio de renda da elite dos outros estados."
+                st.markdown("### 🏆 Elite: relação entre renda e nota")
+                elite_tabela = pd.DataFrame(
+                    {
+                        "Indicador": ["Nota média da elite (nota)", "Nota média da elite (%)", "Renda média da elite (índice)", "Renda predominante na elite (%)"],
+                        "AM": [
+                            elite_am["nota_elite"],
+                            elite_am["nota_elite_pct"],
+                            elite_am["renda_media_ordem"],
+                            elite_am["percentual_renda_predominante"],
+                        ],
+                        "Outros estados": [
+                            elite_outros["nota_elite"],
+                            elite_outros["nota_elite_pct"],
+                            elite_outros["renda_media_ordem"],
+                            elite_outros["percentual_renda_predominante"],
+                        ],
+                    }
+                )
+                elite_tabela["Diferença % (AM vs Outros)"] = elite_tabela.apply(
+                    lambda linha: diferenca_percentual(linha["AM"], linha["Outros estados"]),
+                    axis=1,
+                )
+                st.dataframe(
+                    elite_tabela.style.format({
+                        "AM": "{:.2f}",
+                        "Outros estados": "{:.2f}",
+                        "Diferença % (AM vs Outros)": "{:.2f}%",
+                    }),
+                    use_container_width=True,
+                    hide_index=True,
                 )
 
-            renda_am = elite_am.get("renda_predominante", np.nan)
-            renda_outros = elite_outros.get("renda_predominante", np.nan)
-            pct_renda_am = elite_am.get("percentual_renda_predominante", np.nan)
-            pct_renda_outros = elite_outros.get("percentual_renda_predominante", np.nan)
-            if pd.notna(renda_am) and pd.notna(renda_outros):
-                insights.append(
-                    f"Na elite do AM, a faixa de renda predominante é {renda_am} "
-                    f"({pct_renda_am:.2f}% da elite filtrada); nos outros estados, é {renda_outros} "
-                    f"({pct_renda_outros:.2f}% da elite filtrada)."
+                st.markdown(
+                    f"""
+                <div class="insight-box">
+                <strong>Leitura da elite:</strong><br>
+                A elite é definida como os 10% com maior média de notas dentro de cada grupo filtrado.<br>
+                No AM, a nota média da elite é <strong>{elite_am['nota_elite']:.2f}</strong> pontos ({elite_am['nota_elite_pct']:.2f}%). Nos outros estados, é <strong>{elite_outros['nota_elite']:.2f}</strong> pontos ({elite_outros['nota_elite_pct']:.2f}%).<br>
+                No AM, a renda predominante da elite é <strong>{renda_am}</strong>; nos outros estados, é <strong>{renda_outros}</strong>.<br>
+                A diferença relativa de nota entre as elites é de <strong>{diff_nota_elite:.2f}%</strong>.
+                </div>
+                """,
+                    unsafe_allow_html=True,
                 )
 
-            st.markdown("### 🏆 Elite: relação entre renda e nota")
-            elite_tabela = pd.DataFrame(
-                {
-                    "Indicador": ["Nota média da elite (%)", "Renda média da elite (índice)", "Renda predominante na elite (%)"],
-                    "AM": [
-                        elite_am["nota_elite_pct"],
-                        elite_am["renda_media_ordem"],
-                        elite_am["percentual_renda_predominante"],
-                    ],
-                    "Outros estados": [
-                        elite_outros["nota_elite_pct"],
-                        elite_outros["renda_media_ordem"],
-                        elite_outros["percentual_renda_predominante"],
-                    ],
-                }
-            )
-            elite_tabela["Diferença % (AM vs Outros)"] = elite_tabela.apply(
-                lambda linha: diferenca_percentual(linha["AM"], linha["Outros estados"]),
-                axis=1,
-            )
-            st.dataframe(
-                elite_tabela.style.format({
-                    "AM": "{:.2f}",
-                    "Outros estados": "{:.2f}",
-                    "Diferença % (AM vs Outros)": "{:.2f}%",
-                }),
-                use_container_width=True,
-                hide_index=True,
-            )
-
-            st.markdown(
-                f"""
-            <div class="insight-box">
-            <strong>Leitura da elite:</strong><br>
-            A elite é definida como os 10% com maior média de notas dentro de cada grupo filtrado.
-            No AM, a renda predominante da elite é <strong>{renda_am}</strong>; nos outros estados, é <strong>{renda_outros}</strong>.
-            A diferença relativa de nota entre as elites é de <strong>{diff_nota_elite:.2f}%</strong>.
-            </div>
-            """,
-                unsafe_allow_html=True,
-            )
+                if pd.notna(diff_renda_elite):
+                    st.markdown(
+                        f"""
+                    <div class="insight-box">
+                    O indicador médio de renda da elite do AM está <strong>{abs(diff_renda_elite):.2f}%</strong> {'acima' if diff_renda_elite > 0 else 'abaixo' if diff_renda_elite < 0 else 'igual'} do indicador médio de renda da elite dos outros estados.
+                    </div>
+                    """,
+                        unsafe_allow_html=True,
+                    )
+        else:
+            st.info("Os filtros atuais não retornaram dados suficientes para calcular a elite de desempenho.")
 
     sexo = query_df(
         f"""
         SELECT
             GRUPO_AM,
             TP_SEXO,
+            AVG(NU_NOTA_REDACAO) AS redacao,
             AVG(NU_NOTA_REDACAO) / {ESCALA_NOTA} * 100 AS redacao_pct,
+            AVG(MEDIA_NOTAS) AS media,
             AVG(MEDIA_NOTAS) / {ESCALA_NOTA} * 100 AS media_pct
         FROM enem_notas
         {filter_clause}
@@ -1708,44 +1911,54 @@ def pagina_conclusoes():
         ORDER BY GRUPO_AM, TP_SEXO
         """
     )
-    if not sexo.empty and sexo["TP_SEXO"].nunique() >= 2:
-        for grupo in [GRUPO_AM, GRUPO_OUTROS]:
-            dados_grupo = sexo[sexo["GRUPO_AM"] == grupo]
-            if {"F", "M"}.issubset(set(dados_grupo["TP_SEXO"])):
-                red_f = dados_grupo.loc[dados_grupo["TP_SEXO"] == "F", "redacao_pct"].iloc[0]
-                red_m = dados_grupo.loc[dados_grupo["TP_SEXO"] == "M", "redacao_pct"].iloc[0]
-                if red_f > red_m:
-                    insights.append(f"No grupo {grupo}, as alunas apresentam melhor desempenho relativo em redação.")
-                elif red_m > red_f:
-                    insights.append(f"No grupo {grupo}, os alunos apresentam melhor desempenho relativo em redação.")
 
-    if not insights:
-        st.info("Os filtros atuais não retornaram dados suficientes para gerar insights comparativos.")
-        return
+    with aba_sexo:
+        if not sexo.empty:
+            sexo_display = sexo.copy()
+            sexo_display["Sexo"] = sexo_display["TP_SEXO"].replace({"F": "Feminino", "M": "Masculino"})
+            sexo_display = sexo_display[["GRUPO_AM", "Sexo", "redacao", "redacao_pct", "media", "media_pct"]].rename(
+                columns={
+                    "GRUPO_AM": "Grupo",
+                    "redacao": "Redação (nota)",
+                    "redacao_pct": "Redação (%)",
+                    "media": "Média geral (nota)",
+                    "media_pct": "Média geral (%)",
+                }
+            )
+            st.markdown("### 👥 Diferenças por sexo")
+            st.dataframe(
+                sexo_display.style.format({
+                    "Redação (nota)": "{:.2f}",
+                    "Redação (%)": "{:.2f}%",
+                    "Média geral (nota)": "{:.2f}",
+                    "Média geral (%)": "{:.2f}%",
+                }),
+                use_container_width=True,
+                hide_index=True,
+            )
 
-    st.markdown("### 🔍 Observações estatísticas geradas pelos dados filtrados")
-    for insight in insights:
-        st.markdown(
-            f"""
-        <div class="insight-box">
-        {insight}
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-
-    st.markdown(
-        """
-
-    ---
-
-    ✅ Arquivo completo processado  
-    ✅ Metadados validados  
-    ✅ Consultas agregadas otimizadas  
-    ✅ Comparações feitas sempre como AM vs Outros estados  
-    ✅ Filtros globais aplicados às análises  
-    """
-    )
+            if sexo["TP_SEXO"].nunique() >= 2:
+                for grupo in [GRUPO_AM, GRUPO_OUTROS]:
+                    dados_grupo = sexo[sexo["GRUPO_AM"] == grupo]
+                    if {"F", "M"}.issubset(set(dados_grupo["TP_SEXO"])):
+                        red_f = dados_grupo.loc[dados_grupo["TP_SEXO"] == "F", "redacao_pct"].iloc[0]
+                        red_m = dados_grupo.loc[dados_grupo["TP_SEXO"] == "M", "redacao_pct"].iloc[0]
+                        if red_f > red_m:
+                            frase = f"No grupo {grupo}, as alunas apresentam melhor desempenho relativo em redação."
+                        elif red_m > red_f:
+                            frase = f"No grupo {grupo}, os alunos apresentam melhor desempenho relativo em redação."
+                        else:
+                            frase = f"No grupo {grupo}, o desempenho relativo em redação é equivalente entre os sexos."
+                        st.markdown(
+                            f"""
+                        <div class="insight-box">
+                        {frase}
+                        </div>
+                        """,
+                            unsafe_allow_html=True,
+                        )
+        else:
+            st.info("Os filtros atuais não retornaram dados suficientes para comparar por sexo.")
 
 def main():
     st.sidebar.markdown("# 📊 ENEM 2019 - Dashboard")
