@@ -368,13 +368,15 @@ def setup_filters():
     else:
         st.sidebar.caption("Filtro de sexo não aplicado: coluna TP_SEXO não encontrada na base.")
 
-    renda_selected = RENDA_ORDEM
+    renda_selected = []
     if "Q006" in colunas:
         renda_selected = st.sidebar.multiselect(
             "Renda familiar",
             options=RENDA_ORDEM,
-            default=RENDA_ORDEM,
+            default=[],
+            placeholder="Todas as rendas",
         )
+        st.sidebar.caption("Deixe em branco para considerar todas as rendas.")
     else:
         st.sidebar.caption("Filtro de renda não aplicado: coluna Q006 não encontrada na base.")
 
